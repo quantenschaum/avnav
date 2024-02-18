@@ -201,12 +201,12 @@ class AVNStore(object):
           AVNLog.debug("ignore ais for %s due to higher prio %d",mmsi,existing.priority)
           return
       existing.value.update(data) # update existing data with new data
-      if "second" in data or "lat" in data: # use timestamp from ais data (usually bound to position)
+      if "second" in data or "lat" in data: # use timestamp is bound to position
           existing.timestamp = now
-          sec=data.get("second")
-          if sec is not None and 0<=sec<60:
-            delay = (now%60-sec)%60
-            existing.timestamp -= delay
+          # sec=data.get("second")
+          # if sec is not None and 0<=sec<60: # use timestamp from ais seconds
+          #   delay = (now%60-sec)%60 # delay of message (up to 59s)
+          #   existing.timestamp -= delay # shift timestamp back
       self.__lastAisSource=source
 
   def addAisItem(self,mmsi,values,source,priority,now=None):
