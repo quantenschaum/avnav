@@ -68,7 +68,6 @@ class AVNStore(object):
         return None
       return self.value.get('mmsi')
   #fields we merge
-  ais5mergeFields=['imo_id','callsign','shipname','shiptype','destination','length','beam','draught']
   CHANGE_COUNTER = ['alarm', 'leg', 'route','config']
   def __init__(self,expiryTime,aisExpiryTime,ownMMSI):
     self.__list={}
@@ -202,15 +201,12 @@ class AVNStore(object):
           AVNLog.debug("ignore ais for %s due to higher prio %d",mmsi,existing.priority)
           return
       existing.value.update(data) # update existing data with new data
-      if "second" in data: # use timestamp from ais data (usually bound to position)
-          sec=data["second"]
-          if sec is not None and 0<sec<60:
+      if "second" in data or "lat" in data: # use timestamp from ais data (usually bound to position)
+          existing.timestamp = now
+          sec=data.get("second")
+          if sec is not None and 0<=sec<60:
             delay = (now%60-sec)%60
-            existing.timestamp = now-delay
-          else:
-            existing.timestamp = now
-      elif "lat" in data: # fallback
-        existing.timestamp = now
+            existing.timestamp -= delay
       self.__lastAisSource=source
 
   def addAisItem(self,mmsi,values,source,priority,now=None):

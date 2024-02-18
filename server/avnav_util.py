@@ -490,7 +490,6 @@ class AVNUtil(object):
     except: pass
 
     try:
-        #if rt["type"] in (5,24):
         if "lat" not in rt:
             del rt["type"] # remove to keep
     except: pass
