@@ -131,7 +131,7 @@ class AVNFeeder(AVNWorker):
     finally:
       self.listlock.release()
 
-  def get_messages(self, chunk_size=10, nmea_filter=None, handler_name="unknown", timeout=1, discard_time=1):
+  def get_messages(self, chunk_size=10, nmea_filter=None, handler_name="unknown", timeout=2, discard_time=1):
     """yields chunks of unprocessed messages
     - chunks may be shorter than requested or emtpy
     - yield single messages if chunk_size==1
@@ -145,6 +145,8 @@ class AVNFeeder(AVNWorker):
         start=seq+1 # first seq id of messages to yield
         end=start+chunk_size # last seq id of msgs to yield, exclusive
         unprocessed=sequence-seq # number of unprocessed messages
+        filled_since=time.monotonic()-t0 # time since pipeline has been emptied
+        #print("unprocessed",unprocessed,"seq",(seq,sequence),f"age {filled_since:.3f}","S/E",(start,end))
         if unprocessed>len(history): # buffer overflow, too many massages
           lost=unprocessed-len(history)
           AVNLog.error("%s lost %d messages", handler_name, lost)
@@ -152,8 +154,6 @@ class AVNFeeder(AVNWorker):
           start=sequence-len(history)
           seq=start
           unprocessed=sequence-seq
-        filled_since=time.monotonic()-t0 # time since pipeline has been emptied
-        #print("unprocessed",unprocessed,"seq",(seq,sequence),f"age {filled_since:.3f}","S/E",(start,end))
         if filled_since>discard_time and unprocessed>chunk_size: # force empty pipeline, discard messages
           end=sequence+1 # +1 because end is exclusive
           start=max(seq+1,end-chunk_size) # yield newest msgs from buffer
@@ -172,6 +172,9 @@ class AVNFeeder(AVNWorker):
           self.listlock.wait(timeout)
         if empty:
           t0=time.monotonic() # reset time after waiting, it has been empty until now
+        if self.sequence>sequence: # new messages are available now
+          assert not messages
+          continue
         #print("yield",len(messages),"empty" if empty else "")
       assert len(messages)<=chunk_size
       # filtering should better happen outside in the handler itself
@@ -246,7 +249,7 @@ class AVNFeeder(AVNWorker):
     self.setInfo('main', "running", WorkerStatus.RUNNING)
     while not self.shouldStop():
       try:
-        for chunk in self.get_messages(nmea_filter=self.nmeaFilter,name="decoder"):
+        for chunk in self.get_messages(nmea_filter=self.nmeaFilter,handler_name="decoder"):
           if self.shouldStop(): break
           self.setInfo('main',"feeding NMEA", WorkerStatus.NMEA)
           for msg in chunk:
@@ -254,8 +257,6 @@ class AVNFeeder(AVNWorker):
               nmeaParser.parseData(msg.data,source=msg.source,sourcePriority=msg.sourcePriority)
       except Exception as e:
         AVNLog.warn("feeder exception - retrying %s",traceback.format_exc())
-        print(traceback.format_exc())
-        raise
 
 
 class AVNGpsdFeeder(AVNFeeder):
