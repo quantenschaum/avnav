@@ -24,6 +24,7 @@
 #  parts from this software (AIS decoding) are taken from the gpsd project
 #  so refer to this BSD licencse also (see ais.py) or omit ais.py 
 ###############################################################################
+import time
 
 from avnav_worker import *
 hasSerial=False
@@ -216,15 +217,13 @@ class AVNFeeder(AVNWorker):
               #our requested sequence is not in the list any more
               numErrors=startSequence-sequence
               startPoint=0
-            allowedAge=time.monotonic()-maxAge #maybe better related to return point
-            while self.history[startPoint].timestamp < allowedAge and startPoint < len(self.history):
-              numErrors+=1
-              startPoint+=1
+            min_time=time.monotonic()-maxAge # min required timestamp
+            if self.history[startPoint].timestamp < min_time: # data is too old
+              new_start=max(0,len(self.history)-maxEntries) # flush the queue
+              numErrors+=new_start-startPoint # discard messages
+              startPoint=new_start # return newest maxEntries only
             if startPoint < len(self.history):
-              #something to return
-              numrt=len(self.history)-startPoint
-              if numrt > maxEntries:
-                numrt=maxEntries
+              numrt=min(len(self.history)-startPoint,maxEntries)
               seq=startSequence+startPoint+numrt-1
               rtlist=self.history[startPoint:startPoint+numrt]
               break
