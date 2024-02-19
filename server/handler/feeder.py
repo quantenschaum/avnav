@@ -131,7 +131,7 @@ class AVNFeeder(AVNWorker):
     finally:
       self.listlock.release()
 
-  def get_messages(self, chunk_size=10, nmea_filter=None, handler_name="unknown", timeout=2, discard_time=1):
+  def get_messages(self, chunk_size=10, nmea_filter=None, handler_name="", timeout=2, discard_time=1):
     """yields chunks of unprocessed messages
     - chunks may be shorter than requested or emtpy
     - yield single messages if chunk_size==1
@@ -143,26 +143,27 @@ class AVNFeeder(AVNWorker):
       with self.listlock:
         history,sequence=self.history,self.sequence
         start=seq+1 # first seq id of messages to yield
-        end=start+chunk_size # last seq id of msgs to yield, exclusive
+        end=start+chunk_size # last seq id of messages to yield, exclusive
         unprocessed=sequence-seq # number of unprocessed messages
         filled_since=time.monotonic()-t0 # time since pipeline has been emptied
         #print("unprocessed",unprocessed,"seq",(seq,sequence),f"age {filled_since:.3f}","S/E",(start,end))
         if unprocessed>len(history): # buffer overflow, too many massages
           lost=unprocessed-len(history)
-          AVNLog.error("%s lost %d messages", handler_name, lost)
           #print("OVERFLOW",lost)
           start=sequence-len(history)+1
           end=start+chunk_size
           seq=start-1
           unprocessed=sequence-seq
+          AVNLog.error("%s lost %d messages", handler_name, lost)
           #print("unprocessed",unprocessed,"seq",(seq,sequence),f"age {filled_since:.3f}","S/E",(start,end))
         if filled_since>discard_time and unprocessed>chunk_size: # force empty pipeline, discard messages
           end=sequence+1 # +1 because end is exclusive
-          start=max(seq+1,end-chunk_size) # yield newest msgs from buffer
-          AVNLog.error("%s discarded %d messages", handler_name, start-(seq+1))
+          start=max(seq+1,end-chunk_size) # yield newest messages from buffer
+          discarded=start-(seq+1)
           #print("DISCARDED",start-(seq+1),"S/E",(start,end))
           seq=min(start-1,sequence)
           unprocessed=sequence-seq
+          AVNLog.error("%s discarded %d messages", handler_name, discarded)
           #print("unprocessed",unprocessed,"seq",(seq,sequence),f"age {filled_since:.3f}","S/E",(start,end))
         o=sequence-len(history)+1 # offset=sequence-array_index
         start,end=start-o,end-o # seq --> history index
