@@ -25,7 +25,6 @@
 #  so refer to this BSD licencse also (see ais.py) or omit ais.py 
 ###############################################################################
 import socket
-import re
 
 from avnav_nmea import *
 from avnav_worker import *
@@ -168,7 +167,6 @@ class SocketReader(object):
           if msg.source in blacklist:
             AVNLog.debug("ignore %s:%s due to blacklist", msg.source, msg.data)
           else:
-            print(">",msg.data.strip())
             self.socket.sendall(msg.data.encode('ascii', errors='ignore'))
             sent = True
         if not sent:
