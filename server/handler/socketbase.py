@@ -154,30 +154,24 @@ class SocketReader(object):
     '''
     write method
     there is no stop handling so the socket must be closed from another thread
-    :param infoName:
-    :param filterstr:
-    :param version:
-    :param blacklist:
-    :return:
     '''
     filter = None
     if filterstr != "":
       filter = filterstr.split(',')
     self.setInfo(infoName, "sending data", WorkerStatus.RUNNING)
     try:
-      seq = 0
       self.socket.sendall(("avnav_server %s\r\n" % (version)).encode('utf-8'))
-      while self.socket.fileno() >= 0:
-        hasSend = False
-        seq, data = self.feeder.fetchFromHistory(seq, 10, nmeafilter=filter, includeSource=True)
-        if len(data) > 0:
-          for line in data:
-            if line.source in blacklist:
-              AVNLog.debug("ignore %s:%s due to blacklist", line.source, line.data)
-            else:
-              self.socket.sendall(line.data.encode('ascii', errors='ignore'))
-              hasSend = True
-        if not hasSend:
+      for chunk in self.feeder.get_messages(handler_name=infoName, nmea_filter=filter):
+        if self.socket.fileno() < 0: break
+        sent = False
+        for msg in chunk:
+          if msg.source in blacklist:
+            AVNLog.debug("ignore %s:%s due to blacklist", msg.source, msg.data)
+          else:
+            print(">",msg.data.strip())
+            self.socket.sendall(msg.data.encode('ascii', errors='ignore'))
+            sent = True
+        if not sent:
           # just throw an exception if the reader potentially closed the socket
           self.socket.getpeername()
     except Exception as e:

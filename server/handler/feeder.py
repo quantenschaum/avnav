@@ -131,13 +131,13 @@ class AVNFeeder(AVNWorker):
     finally:
       self.listlock.release()
 
-  def get_messages(self, chunk_size=10, nmea_filter=None, handler_name="", timeout=2, discard_time=1):
+  def get_messages(self, chunk_size=10, nmea_filter=None, handler_name="", timeout=1, discard_time=1):
     """yields chunks of unprocessed messages
     - chunks may be shorter than requested or emtpy
     - yield single messages if chunk_size==1
     - discards messages if not all messages have be processed within discard_time"""
     assert chunk_size>0
-    seq=0 # sequence id of last processed message
+    seq=self.sequence # sequence id of last processed message
     t0=time.monotonic() # timestamp when pipeline was empty
     while True:
       with self.listlock:
