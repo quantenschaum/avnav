@@ -136,7 +136,7 @@ class AVNFeeder(AVNWorker):
     - chunks may be shorter than requested or emtpy
     - yield single messages if chunk_size==1
     - discards messages if not all messages have be processed within discard_time"""
-    assert chunk_size>=0
+    assert chunk_size>0
     seq=0 # sequence id of last processed message
     t0=time.monotonic() # timestamp when pipeline was empty
     while True:
@@ -151,19 +151,23 @@ class AVNFeeder(AVNWorker):
           lost=unprocessed-len(history)
           AVNLog.error("%s lost %d messages", handler_name, lost)
           #print("OVERFLOW",lost)
-          start=sequence-len(history)
-          seq=start
+          start=sequence-len(history)+1
+          end=start+chunk_size
+          seq=start-1
           unprocessed=sequence-seq
+          #print("unprocessed",unprocessed,"seq",(seq,sequence),f"age {filled_since:.3f}","S/E",(start,end))
         if filled_since>discard_time and unprocessed>chunk_size: # force empty pipeline, discard messages
           end=sequence+1 # +1 because end is exclusive
           start=max(seq+1,end-chunk_size) # yield newest msgs from buffer
           AVNLog.error("%s discarded %d messages", handler_name, start-(seq+1))
           #print("DISCARDED",start-(seq+1),"S/E",(start,end))
           seq=min(start-1,sequence)
+          unprocessed=sequence-seq
+          #print("unprocessed",unprocessed,"seq",(seq,sequence),f"age {filled_since:.3f}","S/E",(start,end))
         o=sequence-len(history)+1 # offset=sequence-array_index
         start,end=start-o,end-o # seq --> history index
         end=min(end,len(history)) # limit chunk to available data
-        assert 0<=start<=len(history) and 0<=end<=len(history), (start,end,len(history))
+        assert start<=end and 0<=start<=len(history) and 0<=end<=len(history), (start,end,len(history))
         messages=history[start:end]
         seq+=len(messages)
         assert seq<=sequence,(seq,sequence)
@@ -175,7 +179,7 @@ class AVNFeeder(AVNWorker):
         if self.sequence>sequence: # new messages are available now
           assert not messages
           continue
-        #print("yield",len(messages),"empty" if empty else "")
+        #print("yield",len(messages),"remaining",len(history)-end)
       assert len(messages)<=chunk_size
       # filtering should better happen outside in the handler itself
       messages=list(filter(lambda m:NMEAParser.checkFilter(m.data,nmea_filter), messages))
