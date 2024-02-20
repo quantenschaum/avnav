@@ -131,7 +131,7 @@ class AVNFeeder(AVNWorker):
     finally:
       self.listlock.release()
 
-  def get_messages(self, chunk_size=10, nmea_filter=None, handler_name="", timeout=1, discard_time=1):
+  def get_messages(self, chunk_size=10, nmea_filter=None, handler_name="feeder", timeout=1, discard_time=1):
     """yields chunks of unprocessed messages
     - chunks may be shorter than requested or emtpy
     - yield single messages if chunk_size==1
@@ -149,21 +149,21 @@ class AVNFeeder(AVNWorker):
         #print("unprocessed",unprocessed,"seq",(seq,sequence),f"age {filled_since:.3f}","S/E",(start,end))
         if unprocessed>len(history): # buffer overflow, too many massages
           lost=unprocessed-len(history)
-          #print("OVERFLOW",lost)
           start=sequence-len(history)+1
           end=start+chunk_size
           seq=start-1
           unprocessed=sequence-seq
           AVNLog.error("%s lost %d messages", handler_name, lost)
+          #print("OVERFLOW",lost)
           #print("unprocessed",unprocessed,"seq",(seq,sequence),f"age {filled_since:.3f}","S/E",(start,end))
         if filled_since>discard_time and unprocessed>chunk_size: # force empty pipeline, discard messages
           end=sequence+1 # +1 because end is exclusive
           start=max(seq+1,end-chunk_size) # yield newest messages from buffer
           discarded=start-(seq+1)
-          #print("DISCARDED",start-(seq+1),"S/E",(start,end))
           seq=min(start-1,sequence)
           unprocessed=sequence-seq
           AVNLog.error("%s discarded %d messages", handler_name, discarded)
+          #print("DISCARDED",start-(seq+1),"S/E",(start,end))
           #print("unprocessed",unprocessed,"seq",(seq,sequence),f"age {filled_since:.3f}","S/E",(start,end))
         o=sequence-len(history)+1 # offset=sequence-array_index
         start,end=start-o,end-o # seq --> history index
@@ -190,64 +190,14 @@ class AVNFeeder(AVNWorker):
   #only return entries with higher sequence
   #return a tuple (lastSequence,[listOfEntries])
   #when sequence == None or 0 - just fetch the topmost entries (maxEntries)
-  def fetchFromHistory(self,sequence,maxEntries=100,includeSource=False,waitTime=0.1,nmeafilter=None, returnError=False):
-    seq=0
-    list=[]
-    if waitTime <=0:
-      waitTime=0.1
-    if maxEntries< 0:
-      maxEntries=0
-    if sequence is None:
-      sequence=0
-    stop = time.time() + waitTime
-    numErrors=0
-    self.listlock.acquire()
-    if sequence <= 0:
-      #if a new connection is opened - always wait for a new entry before sending out
-      #sequence = 0 or sequence = None is a new connection
-      #self.sequence starts at 1
-      sequence=self.sequence
+  def fetchFromHistory(self,sequence,maxEntries=10,includeSource=False,waitTime=0.1,nmeafilter=None, returnError=False):
+    seq=sequence or self.get_messages(chunk_size=maxEntries, timeout=waitTime, nmea_filter=nmeafilter)
     try:
-      while len(list) < 1:
-        seq=self.sequence
-        if seq > sequence:
-          if (seq-sequence) > maxEntries:
-            numErrors=(seq-sequence)-maxEntries #we missed some entries
-            seq=sequence+maxEntries
-          start=seq-sequence
-          list=self.history[-start:]
-        if len(list) < 1:
-          wait = stop - time.time()
-          if wait <= 0:
-            break
-          self.listlock.wait(wait)
-    except:
-      pass
-    self.listlock.release()
-    if len(list) < 1:
-      if returnError:
-        return (numErrors,seq,list)
-      return (seq,list)
-    if includeSource:
-      if nmeafilter is None:
-        if returnError:
-          return (numErrors,seq,list)
-        return (seq,list)
-      rl=[el for el in list if NMEAParser.checkFilter(el.data,nmeafilter)]
-      if returnError:
-        return (numErrors,seq,rl)
-      return (seq,rl)
-    else:
-      rt=[]
-      for le in list:
-        if NMEAParser.checkFilter(le.data,nmeafilter):
-          rt.append(le.data)
-      if returnError:
-        return (numErrors,seq,rt)
-      return (seq,rt)
+      messages=seq.__next__()
+    except StopIteration:
+      messages=[]
+    return (0, seq, messages) if returnError else (seq, messages)
 
-  #a standalone feeder that uses our bultin methods
-  
   def run(self):
     AVNLog.info("standalone feeder started")
     nmeaParser=NMEAParser(self.navdata)
