@@ -24,7 +24,7 @@
 #  parts from this software (AIS decoding) are taken from the gpsd project
 #  so refer to this BSD licencse also (see ais.py) or omit ais.py 
 ###############################################################################
-import traceback
+import inspect
 
 import serial
 import socket
@@ -186,17 +186,15 @@ class AVNFeeder(AVNWorker):
       messages=list(filter(lambda m:NMEAParser.checkFilter(m.data,nmea_filter), messages))
       yield messages if chunk_size>1 else messages[0] if messages else None
 
-  #fetch entries from the history
-  #only return entries with higher sequence
-  #return a tuple (lastSequence,[listOfEntries])
-  #when sequence == None or 0 - just fetch the topmost entries (maxEntries)
-  def fetchFromHistory(self,sequence,maxEntries=10,includeSource=False,waitTime=0.1,nmeafilter=None, returnError=False):
-    seq=sequence or self.get_messages(chunk_size=maxEntries, timeout=waitTime, nmea_filter=nmeafilter)
+  def fetchFromHistory(self,sequence,maxEntries=10,includeSource=False,waitTime=0.1,nmeafilter=None,returnError=False):
+    "wrapper for get_messages for compatibility, initialize with sequence 0"
+    seq=sequence or self.get_messages(chunk_size=maxEntries, timeout=waitTime, nmea_filter=nmeafilter,
+                                      handler_name=inspect.stack()[1].filename.split("/")[-1].replace(".py",""))
     try:
       messages=seq.__next__()
     except StopIteration:
       messages=[]
-    return (0, seq, messages) if returnError else (seq, messages)
+    return (0, seq, messages) if returnError else (seq, messages) # errors are logged in get_messages
 
   def run(self):
     AVNLog.info("standalone feeder started")
