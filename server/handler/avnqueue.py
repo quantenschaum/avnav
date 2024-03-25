@@ -268,13 +268,9 @@ class AVNQueue(AVNWorker):
 avnav_handlerList.registerHandler(AVNQueue)
 
 class Fetcher:
-  def _split(self,param):
-    if param is None:
-      return None
-    rt=[el for el in param.split(",") if el != ""]
-    if len(rt) < 1:
-      return None
-    return rt
+  def _split(self, param):
+    if param:
+      return list(filter(len, map(str.strip, param.split(",")))) or None
 
   def __init__(self,queue:AVNQueue,
                infoHandler:InfoHandler,

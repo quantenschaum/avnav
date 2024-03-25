@@ -155,7 +155,7 @@ class AVNSocketReader(AVNWorker,SocketReader):
   def _writer(self, socketConnection):
     socketConnection.writeSocket(self.P_WRITE_FILTER.fromDict(self.param),
                                  self.version,
-                                 blacklist=self.P_BLACKLIST.fromDict(self.param).split(','))
+                                 blacklist=self.P_BLACKLIST.fromDict(self.param))
 
 avnav_handlerList.registerHandler(AVNSocketReader)
         
