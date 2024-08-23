@@ -128,9 +128,7 @@ Helper.getParam=(key)=>{
 };
 
 Helper.to360=(a)=>{
-    while (a < 360) {
-        a += 360;
-    }
+    while (a < 0) { a += 360; }
     return a % 360;
 };
 

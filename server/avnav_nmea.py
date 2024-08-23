@@ -772,5 +772,8 @@ class NMEAParser(object):
 
 def to360(a):
     "limit a to [0,360)"
-    while a < 0: a += 360
     return a % 360
+
+def to180(a):
+  "limit a to [-180,+180)"
+  return to360(a + 180) - 180
