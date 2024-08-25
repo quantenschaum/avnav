@@ -242,6 +242,7 @@ let keys={
             windowDimensions: K,
             layoutEditing:K,
             layoutSequence: K, //updated on layout load
+            layoutReverts: K,
             reloadSequence: K, //will be changed if new data from server
             toastText:K,
             toastTimeout:K,
@@ -562,6 +563,15 @@ export const KeyHelper = {
      */
     getValueKeys:()=>{
         return valueKeys;
+    },
+    removeNodeInfo:(keys)=>{
+        if (! (keys instanceof Object)) return keys;
+        if (keys.__path !== undefined) {
+            let rt={...keys};
+            delete rt.__path;
+            return rt;
+        }
+        return keys;
     }
 };
 
