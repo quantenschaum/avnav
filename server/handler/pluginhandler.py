@@ -22,9 +22,8 @@
 #  DEALINGS IN THE SOFTWARE.
 #
 #  parts from this software (AIS decoding) are taken from the gpsd project
-#  so refer to this BSD licencse also (see ais.py) or omit ais.py 
+#  so refer to this BSD licencse also (see ais.py) or omit ais.py
 ###############################################################################
-import imp
 import inspect
 import json
 from typing import Dict, Any
@@ -48,10 +47,27 @@ from commandhandler import AVNCommandHandler
 URL_PREFIX= "/plugins"
 
 '''
-hide plugins if an environment variable with this prefix 
+hide plugins if an environment variable with this prefix
 and the "normalized" plugin name is set
 '''
 ENV_PREFIX="AVNAV_HIDE_"
+
+try:
+  from imp import load_source
+except:
+  import importlib
+  def load_source(modname, filename):
+    # print("LOAD", modname, filename)
+    "https://stackoverflow.com/questions/76694726/replacing-imp-load-source-in-python-3-12"
+    loader = importlib.machinery.SourceFileLoader(modname, filename)
+    spec = importlib.util.spec_from_file_location(modname, filename, loader=loader)
+    module = importlib.util.module_from_spec(spec)
+    # The module is always executed and not cached in sys.modules.
+    # Uncomment the following line to cache the module.
+    # sys.modules[module.__name__] = module
+    loader.exec_module(module)
+    return module
+
 
 class UserApp(object):
   def __init__(self,url,icon,title):
@@ -159,7 +175,7 @@ class ApiImpl(AVNApi):
 
 
   def getPrefixForItems(self):
-    return re.sub(".*\.","",self.prefix)
+    return re.sub(r".*\.","",self.prefix)
 
   def log(self, str, *args):
     AVNLog.info("%s",str % args)
@@ -461,7 +477,7 @@ class AVNPluginHandler(AVNWorker):
     AVNWorker.__init__(self, param)
     self.queue=None
     self.createdPlugins={}
-    self.createdApis={} 
+    self.createdApis={}
     self.startedThreads={}
     self.pluginDirs={} #key: moduleName, Value: dir
     self.configLock=threading.Lock()
@@ -654,7 +670,7 @@ class AVNPluginHandler(AVNWorker):
     if not os.path.exists(moduleFile):
       return None
     try:
-      rt = imp.load_source(name, moduleFile)
+      rt = load_source(name, moduleFile)
       AVNLog.info("loaded %s as %s", moduleFile, name)
       return rt
     except:
