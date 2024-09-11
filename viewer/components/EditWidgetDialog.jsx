@@ -116,7 +116,7 @@ class EditWidgetDialog extends React.Component{
             <React.Fragment>
             <div className="selectDialog editWidgetDialog">
                 <h3 className="dialogTitle">{this.props.title||'Select Widget'}</h3>
-                <InputSelect className={panelClass}
+                {(this.props.panelList !== undefined) && <InputSelect className={panelClass}
                              dialogRow={true}
                              label="Panel"
                              value={this.state.panel}
@@ -125,6 +125,7 @@ class EditWidgetDialog extends React.Component{
                                 this.setState({panel:selected.name})
                                 }}
                              showDialogFunction={this.showDialog}/>
+                }
                 {hasCurrent?
                     <div className="dialogRow info"><span className="inputLabel">Current</span>{this.props.current.name}</div>
                     :
@@ -152,7 +153,7 @@ class EditWidgetDialog extends React.Component{
                         onChange:self.updateWidgetState
                     })
                 })}
-                {(this.state.widget.name !== undefined)?
+                {(this.state.widget.name !== undefined && this.props.insertCallback)?
                     <div className="insertButtons">
                         {hasCurrent?<DB name="before" onClick={()=>this.insert(true)}>Before</DB>:null}
                         {hasCurrent?<DB name="after" onClick={()=>this.insert(false)}>After</DB>:null}
@@ -218,7 +219,7 @@ const filterObject=(data)=>{
  *  types: a list of allowed widget types
  * @return {boolean}
  */
-EditWidgetDialog.createDialog=(widgetItem,pagename,panelname,opt_options)=>{
+EditWidgetDialog.createDialog=(widgetItem,pageWithOptions,panelname,opt_options)=>{
     if (! LayoutHandler.isEditing()) return false;
     if (! opt_options) opt_options={};
     let index=opt_options.beginning?-1:1;
@@ -228,7 +229,7 @@ EditWidgetDialog.createDialog=(widgetItem,pagename,panelname,opt_options)=>{
     OverlayDialog.dialog((props)=> {
         let panelList=[panelname];
         if (!opt_options.fixPanel){
-            panelList=LayoutHandler.getPagePanels(pagename);
+            panelList=LayoutHandler.getPagePanels(pageWithOptions);
         }
         if (opt_options.fixPanel instanceof Array){
             panelList=opt_options.fixPanel;
@@ -250,18 +251,26 @@ EditWidgetDialog.createDialog=(widgetItem,pagename,panelname,opt_options)=>{
                 else{
                     addMode=opt_options.beginning?LayoutHandler.ADD_MODES.beginning:LayoutHandler.ADD_MODES.end;
                 }
-                LayoutHandler.replaceItem(pagename,newPanel,index,filterObject(selected),addMode);
+                LayoutHandler.withTransaction(pageWithOptions,(handler)=> {
+                    handler.replaceItem(pageWithOptions, newPanel, index, filterObject(selected), addMode);
+                });
             }}
             removeCallback={widgetItem?()=>{
-                LayoutHandler.replaceItem(pagename,panelname,index);
+                    LayoutHandler.withTransaction(pageWithOptions,(handler)=> {
+                        handler.replaceItem(pageWithOptions, panelname, index);
+                    });
             }:undefined}
             updateCallback={widgetItem?(changes,newPanel)=>{
                 if (newPanel !== panelname){
-                    LayoutHandler.replaceItem(pagename,panelname,index);
-                    LayoutHandler.replaceItem(pagename,newPanel,1,filterObject(changes),LayoutHandler.ADD_MODES.end);
+                    LayoutHandler.withTransaction(pageWithOptions,(handler)=>{
+                        handler.replaceItem(pageWithOptions,panelname,index);
+                        handler.replaceItem(pageWithOptions,newPanel,1,filterObject(changes),LayoutHandler.ADD_MODES.end);
+                    })
                 }
                 else{
-                    LayoutHandler.replaceItem(pagename,panelname,index,filterObject(changes));
+                    LayoutHandler.withTransaction(pageWithOptions,(handler)=>{
+                        handler.replaceItem(pageWithOptions,panelname,index,filterObject(changes));
+                    })
                 }
             }:undefined}
             />

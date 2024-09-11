@@ -3,53 +3,50 @@
 
 @x: rgba(255, 20, 7, 0.54);
 
-@horizontalContainerHeight: 4em;
+@horizontalContainerHeight: 4.2em;
 @horizontalContainerDoubleHeight: 7.9em;
-@horizontalWidgetHeight: 3.8em;
+@horizontalWidgetHeight: 4em;
 @infoFontSize: 0.71em;
 
-
+.widgetInfo(){
+  font-size: @infoFontSize;
+  opacity: 0.7;
+}
 .widget{
   position: relative;
   z-index: 100;
-  padding: 0.3em;
-  box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14),
-  0 1px 5px 0 rgba(0, 0, 0, 0.12),
-  0 3px 1px -2px rgba(0, 0, 0, 0.2); /* z1 shadow */
-  .border-box();
+  margin: 0.1em;
   overflow: hidden;
   pointer-events: all;
   background: white;
   .nightColors();
   .flex-shrink(0);
   .flex-grow(1);
-  margin-bottom: 0.1em;
-  margin-top: 0.1em;
-  margin-left: 0.1em;
-  margin-right: 0.1em;
-  .widgetInfo(){
-    font-size: @infoFontSize;
-    position: absolute;
-    top: 0;
-    opacity: 0.7;
-  }
-  .infoRight{
-    .widgetInfo();
-    right: 0.2em;
-  }
-  .infoLeft{
-    .widgetInfo();
-    left: 0.2em;
-  }
-  .unit{
-    font-size: @infoFontSize;
-    opacity: 0.7;
-    margin-left: 0.2em;
+  .flex-display();
+  .flex-direction(column);
+  .flex-justify-content(flex-start);
+  .widgetHead {
+    margin: 0;
+    padding: 0.1em;
+    display: flex;
+    .flex-direction(row);
+    .flex-justify-content(space-between);
+    height: 0.7em;
+    .infoLeft{
+      .widgetInfo();
+    }
+    .infoRight{
+      .widgetInfo();
+    }
   }
   .widgetData{
     text-align: right;
-    max-width: 100%;
+    max-width: calc(100% - 0.2em);
+    margin-left: auto;
+    margin-right: 0.1em;
     max-height: 100%;
+    min-height: 0;
+    min-width: 0;
   }
   &.average .infoLeft{
     .nightForeColor(red);
@@ -61,8 +58,33 @@
   .editing &{
     .flex-grow(0);
   }
+  .unit{
+    font-size: @infoFontSize;
+    opacity: 0.7;
+    margin-left: 0.2em;
+  }
 }
-
+//----- dashboard pages (gps page) ------
+.hfield .widgetContainer .widget{
+  .widgetHead {
+    border-bottom: 1px solid;
+    border-top: 1px solid;
+    .nightBackFade(#E2DFDF);
+    height: unset;
+  }
+  width: unset;
+  margin: 0;
+  .widgetData{
+    padding-top: 0;
+    display: block;
+    white-space: pre;
+  }
+  .centeredWidget {
+    .widgetData{
+      text-align: center;
+    }
+  }
+}
 .widgetContainer{
   font-size: @widgetFontSize;
   .flex-display();
@@ -76,6 +98,7 @@
 }
 .widgetContainer.horizontal{
   .flex-wrap(wrap);
+  .flex-align-items(center);
   max-height: @horizontalContainerHeight;
   .twoRows &{
     max-height: @horizontalContainerDoubleHeight;
@@ -86,6 +109,9 @@
   .editing &{
     .flex-wrap(nowrap);
     min-height: @horizontalContainerHeight;
+    .widget{
+      .flex-shrink(1);
+    }
   }
 }
 
@@ -93,10 +119,15 @@
   overflow: hidden;
   .flex-direction(column);
   .flex-justify-content(flex-end);
+  .flex-align-items(stretch);
   .widget{
-    max-width: @navLeftWidgetWidth;
-    width: @navLeftWidgetWidth;
-    flex-shrink: inherit;
+    min-width: 0;
+    .flex-shrink(1);
+    margin-left: 0.1em;
+    margin-right: 0.1em;
+    padding-left: 0.1em;
+    padding-right: 0.1em;
+    width: calc(100% - 0.2em);
   }
   .editing &{
     top: 0;
@@ -125,7 +156,6 @@
     }
     width: @size;
     .vertical &{
-      width: inherit;
       .widgetData{
         font-size: @bigFontVertical;
       }
@@ -134,12 +164,9 @@
   .smallWidget(@size){
     .widgetData{
       font-size: @smallFont;
-      padding-top: 0.55em;
-      padding-right: 0.1em;
     }
     width: @size;
     .vertical &{
-      width: inherit;
       .widgetData{
         font-size: @smallFont;
       }
@@ -151,7 +178,6 @@
     }
     width: 7em;
     .vertical &{
-      width: inherit;
       .widgetData{
         font-size: @font;
       }
@@ -212,6 +238,7 @@
     .smallWidget(@size1);
     .widgetData{
       text-align: center;
+      margin-top: @smallFont;
     }
   }
   &.timeStatusWidget{
@@ -226,12 +253,14 @@
     }
     .widgetData{
       text-align: center;
+      margin-top: unset;
     }
   }
   &.etaWidget{
     .smallWidget(@size1);
     .widgetData{
       text-align: center;
+      margin-top: unset;
       &.markerName{
         margin-top: 0;
       }
@@ -250,11 +279,10 @@
     .widgetData ~ .widgetData{
       padding-top: 0;
     }
-    .hfield &{
-      .flex-direction(row)!important;
-      .aisPart{
-        .flex(1);
-      }
+    .hfield & .aisPart{
+      .flex-display();
+      .flex-direction(column);
+      .flex(1);
     }
   }
 
@@ -413,7 +441,7 @@
     font-size: @timeFont;
     .nightBackFade(@colorRed);
     padding: 1.5em;
-    padding-top: 1em;
+    padding-top: 0.3em;
     margin: 0.5em;
     border-radius: 4px;
     .mdShadow2();
@@ -425,9 +453,50 @@
       margin: inherit;
     }
   }
-  &.combinedWidget{
-    padding: 0;
-    margin: 0;
+  &.CombinedWidget {
+    .icon.locked {
+      position: absolute;
+      top: calc(50% - 1em);
+      left: calc(50% - 1em);
+      z-index: 101;
+      color: red;
+    }
+    .listContainer {
+      .flex-display();
+      .flex-direction(row);
+      height: 100%;
+      width: 100%;
+
+      .widget {
+        height: 100%;
+        .flex-grow(1);
+        .flex-shrink(1);
+        min-width: 0;
+        border-right: 1px solid
+      }
+
+      .widget:last-of-type {
+        border-right: unset;
+      }
+
+      padding: 0;
+      margin: 0;
+
+    }
+    &.vertical {
+      .listContainer {
+        .flex-direction(column);
+      }
+
+      .widget {
+        height: unset;
+        min-height: 0;
+        width: 100%;
+        .flex-grow(1);
+        .flex-shrink(1);
+        border-right: unset;
+      }
+    }
   }
 
   &.canvasGauge {

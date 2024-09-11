@@ -20,6 +20,7 @@ import {GaugeRadial} from './CanvasGauges.jsx';
 import UndefinedWidget from './UndefinedWidget.jsx';
 import {SKPitchWidget, SKRollWidget} from "./SKWidgets";
 import assign from 'object-assign';
+import {CombinedWidget} from "./CombinedWidget";
 
 let widgetList=[
     {
@@ -166,7 +167,7 @@ let widgetList=[
                 TA: 'TWA'
             };
             let wind=getWindData(props);
-            return assign({},props,{value:wind.windAngle, caption:captions[wind.suffix] })
+            return {...props,value:wind.windAngle, caption:captions[wind.suffix] }
         }
     },
     {
@@ -193,12 +194,12 @@ let widgetList=[
                 TA: 'TWS'
             };
             let wind=getWindData(props);
-            return assign({},props,{
+            return {...props,
                 value:wind.windSpeed,
                 caption:captions[wind.suffix],
                 formatterParameters: props.showKnots?'k':'m',
                 unit: props.showKnots?'kn':'m/s'
-            })
+            }
         }
     },
     {
@@ -352,6 +353,7 @@ let widgetList=[
     },
     {
         name: 'RteCombine',
+        wclass: CombinedWidget,
         caption: '',
         children: [{name:'RteDistance'},{name:'RteEta'}],
         editableParameters:{
@@ -359,8 +361,13 @@ let widgetList=[
             unit: false,
             formatterParameters: false,
             value: false,
-            caption: false
+            caption: false,
+            children: false
         }
+    },
+    {
+        name: 'CombinedWidget',
+        wclass: CombinedWidget
     },
     {
         name: 'Alarm',

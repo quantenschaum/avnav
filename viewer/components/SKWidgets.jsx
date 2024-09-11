@@ -7,7 +7,7 @@ import {useKeyEventHandler} from "../util/GuiHelpers";
 import Formatter from "../util/formatter";
 import PropTypes from "prop-types";
 import {SortableProps, useAvNavSortable} from "../hoc/Sortable";
-import {WidgetProps} from "./WidgetBase";
+import {WidgetHead, WidgetProps} from "./WidgetBase";
 
 const rad2deg=(rad,inDeg)=>{
     if (inDeg) return parseFloat(rad);
@@ -23,13 +23,18 @@ export const SKRollWidget=(props)=>{
         useKeyEventHandler(props,"widget");
         const dd=useAvNavSortable(props.dragId)
         let value=DegreeFormatter(props.value,props.inDegree);
-        let degreeArrow = "--";
-        if (props.value == 0) {
-            degreeArrow = "0";
-        } else if (props.value < 0) {
-            degreeArrow = "\u21D0" + value;
-        } else if (props.value > 0) {
-            degreeArrow = value + "\xA0\u21D2";
+        let degreeArrow = "---";
+        if (props.value !== undefined) {
+            let value = DegreeFormatter(props.value, props.inDegree);
+            degreeArrow = value + "";
+            // arrow left + Wert
+            if (props.value < 0 && value != 0) {
+                degreeArrow = "\u21D0" + degreeArrow;
+            }
+            // value + space + arrow right
+            if (props.value > 0 && value != 0) {
+                degreeArrow = degreeArrow + "\xA0\u21D2";
+            }
         }
         let classes="widget SKRollWidget "+props.className||"";
         let wdClasses="widgetData";
@@ -38,8 +43,7 @@ export const SKRollWidget=(props)=>{
         }
         return (
             <div className={classes} onClick={props.onClick} style={props.style||{}} {...dd}>
-                <div className='infoLeft'>{props.caption}</div>
-                <div className='infoRight'>{props.unit}</div>
+                <WidgetHead {...props}/>
                 <div className={wdClasses}>{degreeArrow}</div>
             </div>
         );
@@ -67,14 +71,18 @@ SKRollWidget.editableParameters={
 export const SKPitchWidget = (props) => {
     useKeyEventHandler(props, "widget")
     const dd = useAvNavSortable(props.dragId);
-    let value = DegreeFormatter(props.value, props.inDegree);
-    let degreeArrow = "--";
-    if (props.value == 0) {
-        degreeArrow = "0";
-    } else if (props.value < 0) {
-        degreeArrow = value + "\xA0\u21D3";
-    } else if (props.value > 0) {
-        degreeArrow = value + "\xA0\u21D1";
+    let degreeArrow = "---";
+    if (props.value !== undefined) {
+        let value = DegreeFormatter(props.value, props.inDegree);
+        degreeArrow = value + "";
+        // arrow left + Wert
+        if (props.value < 0 && value != 0) {
+            degreeArrow += "\xA0\u21D3";
+        }
+        // value + space + arrow right
+        if (props.value > 0 && value != 0) {
+            degreeArrow += "\xA0\u21D1";
+        }
     }
     let classes = "widget SKPitchWidget " + props.className || "";
     let wdClasses = "widgetData";
@@ -83,8 +91,7 @@ export const SKPitchWidget = (props) => {
     }
     return (
         <div className={classes} onClick={props.onClick} style={props.style || {}} {...dd}>
-            <div className='infoLeft'>{props.caption}</div>
-            <div className='infoRight'>{props.unit}</div>
+            <WidgetHead {...props}/>
             <div className={wdClasses}>{degreeArrow}</div>
         </div>
     );

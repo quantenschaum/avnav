@@ -5,20 +5,20 @@
 import React from "react";
 import {useKeyEventHandler} from '../util/GuiHelpers.js';
 import {SortableProps, useAvNavSortable} from "../hoc/Sortable";
-import {WidgetProps} from "./WidgetBase";
+import {WidgetHead, WidgetProps} from "./WidgetBase";
 
 const UndefinedWidget=(props)=>{
     useKeyEventHandler(props,"widget");
-    const dd=useAvNavSortable()
+    const dd=useAvNavSortable(props.id);
     let classes="widget undefinedWidget";
     return (
-        <div className={classes} onClick={this.props.onClick} style={this.props.style} {...dd}>
+        <div className={classes} onClick={props.onClick} style={props.style} {...dd}>
+            <WidgetHead caption="Undefined Widget"/>
             <div className="resize">
             <div className='widgetData'>
-                {this.props.name}
+                {props.name}
             </div>
             </div>
-            <div className='infoLeft'>Undefined Widget</div>
         </div>
         );
     }

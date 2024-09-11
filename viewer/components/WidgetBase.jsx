@@ -25,6 +25,10 @@
  */
 
 import PropTypes from "prop-types";
+import React from "react";
+import {useKeyEventHandler} from "../util/GuiHelpers";
+import {SortableProps, useAvNavSortable} from "../hoc/Sortable";
+import Value from "./Value";
 
 export const WidgetProps={
     onClick:    PropTypes.func,
@@ -33,3 +37,39 @@ export const WidgetProps={
     mode:       PropTypes.string, //display info side by side if small
     caption:    PropTypes.string
 }
+
+export const WidgetHead=(props)=> {
+    if (props.unit === undefined && props.caption === undefined) return null;
+    return (
+    <div className="widgetHead">
+        <div className='infoLeft'>{props.caption}</div>
+        {props.unit !== undefined ?
+            <div className='infoRight'>{props.unit}</div>
+            : <div className='infoRight'></div>
+        }
+    </div>
+    )
+}
+
+WidgetHead.propTypes={
+    unit: PropTypes.string,
+    caption: PropTypes.string
+}
+
+export const WidgetFrame=(props)=> {
+    useKeyEventHandler(props, "widget");
+    const sortableProps = useAvNavSortable(props.dragId)
+    let classes = "widget ";
+    if (props.isAverage) classes += " average";
+    if (props.className) classes += " " + props.className;
+    return <div className={classes} onClick={props.onClick} {...sortableProps} style={props.style}>
+        <WidgetHead {...props}/>
+        <div className="resize">
+            {props.children}
+        </div>
+    </div>
+}
+WidgetFrame.propTypes={
+    ...WidgetProps,
+    ...SortableProps
+};

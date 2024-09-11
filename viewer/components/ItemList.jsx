@@ -64,11 +64,7 @@ const Content=(props)=>{
         </div>
     );
 };
-let sid=0;
-const getSid=()=>{
-    sid++;
-    return "itemList"+sid;
-}
+
 const ItemList = (props) => {
     const itemList = [];
     const existingKeys = {};
@@ -111,18 +107,13 @@ const ItemList = (props) => {
     if (props.fontSize) {
         style.fontSize = props.fontSize;
     }
-    const handleDragEnd=(active,over,id)=>{
-        if (props.onSortEnd){
-            props.onSortEnd(active,over,id);
-        }
-    }
     const SortableContent =
         (sprops) => {
             if (props.dragdrop) {
                 return (
                     <SortContext
-                        onDragEnd={handleDragEnd}
-                        id={props.dragFrame||getSid()}
+                        onDragEnd={props.onSortEnd}
+                        id={props.dragFrame}
                         allowOther={props.allowOther}
                         reverse={props.reverse}
                         mode={props.horizontal? SortModes.horizontal:SortModes.vertical}>
