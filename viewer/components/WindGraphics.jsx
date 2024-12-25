@@ -79,7 +79,7 @@ const WindGraphics = (props) => {
         ctx.arc(width / 2, height / 2, radius * 0.97, 0, 2 * Math.PI);
         ctx.stroke();
         let start, end;
-        if (current.suffix === 'A') {
+        if (current.suffix.endsWith('A')) {
             // Write left partial circle
             ctx.beginPath();
             ctx.strokeStyle = colors.red; // red
@@ -119,10 +119,8 @@ const WindGraphics = (props) => {
         // Move the pointer from 0,0 to center position
         ctx.translate(width / 2, height / 2);
         ctx.font = fontSize + "px Arial";
-        if (!props.show360 && current.suffix !== 'TD') {
-            if (winddirection > 180) winddirection -= 360;
-        }
-        let txt = Formatter.formatDirection(winddirection).replace(/ /g, "0");
+        let a180 = !(props.show360 || current.suffix.endsWith('D'));
+        let txt = Formatter.formatDirection(winddirection,false,a180);
         let xFactor = -0.8;
         if (winddirection < 0) xFactor = -1.0;
         ctx.fillStyle = colors.text;
@@ -147,28 +145,19 @@ const WindGraphics = (props) => {
     let classes = "widget windGraphics " + props.classes || "" + " " + props.className || "";
     let style = {...props.style, ...ddProps.style};
     setTimeout(drawWind, 0);
-    let current = getWindData(props);
-    let windSpeed = "";
-    let showKnots = props.showKnots;
-    try {
-        windSpeed = parseFloat(current.windSpeed);
-        if (showKnots) {
-            windSpeed = windSpeed * 3600 / navcompute.NM;
-        }
-        if (windSpeed < 10) windSpeed = Formatter.formatDecimal(windSpeed, 1, 2);
-        else windSpeed = Formatter.formatDecimal(windSpeed, 3, 0);
-    } catch (e) {
-    }
+    let wind = getWindData(props);
+    var a180 = !(props.show360 || wind.suffix.endsWith('D'));
+    var angle = Formatter.formatDirection(wind.windAngle,false,a180);
+    var unit = props.formatterParameters ? props.formatterParameters[0] : 'kn';
+    var speed = Formatter.formatSpeed(wind.windSpeed,unit);
     return (
         <div className={classes} onClick={props.onClick} {...ddProps} style={style}>
-            <WidgetHead unit={showKnots ? "kn" : "m/s"} caption="Wind"/>
+            <WidgetHead unit={unit} caption="Wind"/>
             <canvas className='widgetData' ref={canvasRef}></canvas>
-            <div className="windSpeed">{windSpeed}</div>
-            <div className="windReference">{current.suffix}</div>
+            <div className="windSpeed">{speed}</div>
+            <div className="windReference">{wind.suffix}</div>
         </div>
-
     );
-
 }
 
 WindGraphics.propTypes={
@@ -197,7 +186,9 @@ WindGraphics.storeKeys={
     showKnots:  keys.properties.windKnots,
     scaleAngle: keys.properties.windScaleAngle
 };
+WindGraphics.formatter='formatSpeed';
 WindGraphics.editableParameters={
+    formatterParameters: true,
     show360: {type:'BOOLEAN',default:false},
     kind: {type:'SELECT',list:['auto','trueAngle','trueDirection','apparent'],default:'auto'}
 }
