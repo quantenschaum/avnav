@@ -10,7 +10,7 @@ import navcompute from '../nav/navcompute.js';
 import {useKeyEventHandler} from '../util/GuiHelpers.js';
 import {getWindData} from "./WindWidget";
 import {useAvNavSortable} from "../hoc/Sortable";
-import {WidgetHead} from "./WidgetBase";
+import {WidgetFrame, WidgetProps} from "./WidgetBase";
 
 const normalColors={
     green:  'rgba(5, 128, 30, 0.57)',
@@ -140,10 +140,6 @@ const WindGraphics = (props) => {
         canvas = item;
         setTimeout(drawWind, 0);
     }
-
-
-    let classes = "widget windGraphics " + props.classes || "" + " " + props.className || "";
-    let style = {...props.style, ...ddProps.style};
     setTimeout(drawWind, 0);
     let wind = getWindData(props);
     var a180 = !(props.show360 || wind.suffix.endsWith('D'));
@@ -151,18 +147,17 @@ const WindGraphics = (props) => {
     var unit = props.formatterParameters ? props.formatterParameters[0] : 'kn';
     var speed = Formatter.formatSpeed(wind.windSpeed,unit);
     return (
-        <div className={classes} onClick={props.onClick} {...ddProps} style={style}>
-            <WidgetHead unit={unit} caption="Wind"/>
+        <WidgetFrame {...props} addClass="windGraphics" unit={unit} caption="Wind" resize={false}>
             <canvas className='widgetData' ref={canvasRef}></canvas>
             <div className="windSpeed">{speed}</div>
-            <div className="windReference">{wind.suffix}</div>
-        </div>
+            <div className="windReference">{current.suffix}</div>
+        </WidgetFrame>
+
     );
 }
 
 WindGraphics.propTypes={
-    onClick: PropTypes.func,
-    classes: PropTypes.string,
+    ...WidgetProps,
     windSpeed: PropTypes.number,
     windAngle: PropTypes.number,
     windAngleTrue:  PropTypes.number,
@@ -171,9 +166,6 @@ WindGraphics.propTypes={
     scaleAngle: PropTypes.number,
     nightMode: PropTypes.bool,
     kind: PropTypes.string, //true,apparent,auto,
-    className: PropTypes.string,
-    dragId: PropTypes.string,
-    style: PropTypes.object,
     show360: PropTypes.bool
 };
 WindGraphics.storeKeys={

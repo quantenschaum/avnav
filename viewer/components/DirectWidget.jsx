@@ -5,12 +5,10 @@
 import React from "react";
 import PropTypes from 'prop-types';
 import Value from './Value.jsx';
-import {useKeyEventHandler} from '../util/GuiHelpers.js';
-import {SortableProps, useAvNavSortable} from "../hoc/Sortable";
-import {WidgetFrame, WidgetHead, WidgetProps} from "./WidgetBase";
+import {WidgetFrame, WidgetProps} from "./WidgetBase";
 
 const DirectWidget=(wprops)=>{
-    const props=wprops.translateFunction?{...wprops,...wprops.translateFunction(wprops)}:wprops;
+    const props=wprops.translateFunction?{...wprops,...wprops.translateFunction({...wprops})}:wprops;
     let val;
     let vdef=props.default||'0';
     if (props.value !== undefined) {
@@ -21,7 +19,7 @@ const DirectWidget=(wprops)=>{
         else val=vdef+"";
     }
     return (
-        <WidgetFrame {...props}>
+        <WidgetFrame {...props} addClass="DirectWidget" >
             <div className='widgetData'>
                 <Value value={val}/>
             </div>
@@ -32,7 +30,6 @@ const DirectWidget=(wprops)=>{
 DirectWidget.propTypes = {
     name: PropTypes.string,
     unit: PropTypes.string,
-    ...SortableProps,
     ...WidgetProps,
     value: PropTypes.any,
     isAverage: PropTypes.bool,

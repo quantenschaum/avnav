@@ -172,7 +172,6 @@ body{
 }
 
 .more {
-  display: none;
   float: right;
   width: 1em;
   height: 1em;
@@ -329,6 +328,9 @@ body{
       .nightBackFade(fade(@colorRed,50%));
     }
   }
+  .errorText{
+    .nightForeFade(@colorRed)
+  }
 
 }
 
@@ -410,6 +412,22 @@ body{
     .nightBorderColorGR(40);
     margin-top: 0.5em;
     padding-top: 0.5em;
+  }
+}
+
+.selectIconDialog{
+  .checkBoxRow{
+    .inputLabel{
+      width: unset;
+      margin-right: unset;
+      margin-left: 1em;
+    }
+  }
+  .listEntry{
+    .flex-wrap(wrap);
+  }
+  .selectedItem {
+    .nightBackFade(@colorSelection);
   }
 }
 
@@ -640,6 +658,7 @@ body{
   padding: 1em;
   .nightBorderColorGR(30);
   .flex-display();
+  .flex-align-items(center);
 }
 .activeEntry{
   .nightBackColor(@colorSelection);
@@ -763,6 +782,7 @@ span.valuePrefix{
   background-size: contain;
   display: inline-block;
   background-repeat: no-repeat;
+  background-position: center;
   .nightOPacity();
 }
 .iconImage(@url){
@@ -962,10 +982,9 @@ span.valuePrefix{
       .flex-align-items(stretch);
     }
   }
-  .resize{
+  .resize,.noresize{
     .flex-display();
     .flex-direction(column);
-    .flex(1);
     .flex-justify-content(space-evenly);
     max-height: 100%;
     min-width: 0;
@@ -1361,6 +1380,15 @@ span.valuePrefix{
     width: auto;
      .flex(1);
     min-width: 10em;
+  }
+}
+
+.editFileDialog{
+  width: 90vw;
+  height: 90vh;
+  .edit{
+    .flex(1);
+    position: relative;
   }
 }
 
