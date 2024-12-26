@@ -65,7 +65,6 @@ const WindWidget = (props) => {
         }
     }
     let classes = "widget windWidget " + props.className || "";
-    let style = {...props.style, ...ddProps.style};
     let wind = getWindData(props);
     var a180 = !(props.show360 || wind.suffix.endsWith('D'));
     var angle = Formatter.formatDirection(wind.windAngle,false,a180);

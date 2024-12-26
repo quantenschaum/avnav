@@ -30,7 +30,6 @@ const nightColors={
 };
 const WindGraphics = (props) => {
     useKeyEventHandler(props, "widget");
-    const ddProps = useAvNavSortable(props.dragId);
     let canvas = undefined;
     const drawWind = () => {
         let current = getWindData(props);
@@ -150,7 +149,7 @@ const WindGraphics = (props) => {
         <WidgetFrame {...props} addClass="windGraphics" unit={unit} caption="Wind" resize={false}>
             <canvas className='widgetData' ref={canvasRef}></canvas>
             <div className="windSpeed">{speed}</div>
-            <div className="windReference">{current.suffix}</div>
+            <div className="windReference">{wind.suffix}</div>
         </WidgetFrame>
 
     );
