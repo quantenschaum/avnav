@@ -183,8 +183,12 @@ export const concatsp=(...args)=>{
     });
     return rt;
 }
+export const unsetOrTrue=(item)=>{
+    return !!(item === undefined || item);
+}
 Helper.concat=concat;
 Helper.concatsp=concatsp;
+Helper.unsetorTrue=unsetOrTrue;
 
 export default Helper;
 
