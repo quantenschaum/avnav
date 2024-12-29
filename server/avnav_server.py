@@ -23,7 +23,7 @@
 #  DEALINGS IN THE SOFTWARE.
 #
 #  parts from this software (AIS decoding) are taken from the gpsd project
-#  so refer to this BSD licencse also (see ais.py) or omit ais.py
+#  so refer to this BSD license also (see ais.py) or omit ais.py
 ###############################################################################
 import datetime
 import logging.handlers
