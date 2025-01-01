@@ -203,7 +203,7 @@ formatSpeed.parameters=[
     {name:'unit',type:'SELECT',list:['kn','ms','kmh','bft','m/s','km/s'],default:'kn'}
 ];
 
-const formatDirection=function(dir,opt_rad,opt_180){
+const formatDirection=function(dir,opt_rad,opt_180=false){
     dir=opt_rad ? Helper.degrees(dir) : dir;
     dir=opt_180 ? Helper.to180(dir) : Helper.to360(dir);
     return formatDecimal(dir,3,0);

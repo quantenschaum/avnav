@@ -151,7 +151,6 @@ const WindGraphics = (props) => {
             <div className="windSpeed">{speed}</div>
             <div className="windReference">{wind.suffix}</div>
         </WidgetFrame>
-
     );
 }
 

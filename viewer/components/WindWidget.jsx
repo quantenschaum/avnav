@@ -50,6 +50,8 @@ export const getWindData=(props)=>{
 }
 
 const WindWidget = (props) => {
+    useKeyEventHandler(props, "widget");
+    let wind = getWindData(props);
     const names = {
         A: {
             speed: 'AWS',
@@ -76,10 +78,8 @@ const WindWidget = (props) => {
                 <React.Fragment>
                     <WidgetHead caption={'W' + wind.suffix}/>
                     <div className="widgetData">
-                        {angle}
-                        <span className="unit">°</span>
-                        /{speed}
-                        <span className="unit">{unit}</span>
+                        {angle}<span className="unit">°</span>
+                        \{speed}<span className="unit">{unit}</span>
                     </div>
                 </React.Fragment>
                 :
