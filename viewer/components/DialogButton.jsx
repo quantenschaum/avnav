@@ -1,43 +1,39 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import {useKeyEventHandlerPlain} from '../util/GuiHelpers.js';
+import GuiHelper from '../util/GuiHelpers.js';
 import KeyHandler from '../util/keyhandler';
-import {concatsp} from "../util/helper";
-import {useDialogContext} from "./OverlayDialog";
 
-const COMPONENT="dialogButton";
-const DialogButton=(props)=>{
-        const dialogContext=useDialogContext();
-        KeyHandler.registerDialogComponent(COMPONENT);
-        useKeyEventHandlerPlain(props.name,COMPONENT,()=>{
-            if (props.onClick && ! props.disabled && props.visible !== false) props.onClick();
-        });
-        let {icon,style,disabled,visible,name,className,toggle,children,onClick,close,...forward}=props;
+class DialogButton extends React.Component {
+    constructor(props){
+        super(props);
+        KeyHandler.registerDialogComponent("dialogButton");
+        GuiHelper.keyEventHandler(this,(component,action)=>{
+            if (this.props.onClick && ! this.props.disabled && this.props.visible !== false) this.props.onClick();
+        },"dialogButton",this.props.name);
+    }
+    render() {
+        let {icon,style,disabled,visible,...forward}=this.props;
         if (visible === false) return null;
+        let className = this.props.className || "";
+        className += " dialogButton " + this.props.name;
         let spanStyle={};
         if (icon !== undefined) {
+            className+=" icon";
             spanStyle.backgroundImage = "url(" + icon + ")";
         }
+        className+=this.props.toggle?" active":" inactive";
         let add = {};
         if (disabled) {
             add.disabled = true;
         }
-        if (close === undefined) close=true;
         return (
-            <button
-                {...forward}
-                {...add}
-                onClick={(ev)=>{
-                    if (! onClick || close) dialogContext.closeDialog();
-                    if (onClick) onClick(ev);
-                }}
-                className={concatsp("dialogButton",name,(icon !== undefined)?"icon":undefined,toggle?"active":"inactive")}
-            >
+            <button {...forward} {...add} className={className}>
             <span style={spanStyle}/>
-                {children}
+                {this.props.children}
             </button>
         );
     }
+}
 
 DialogButton.propTypes={
     onClick: PropTypes.func,
@@ -47,8 +43,7 @@ DialogButton.propTypes={
     style: PropTypes.object,
     disabled: PropTypes.bool,
     toggle: PropTypes.bool,
-    visible: PropTypes.bool,
-    close: PropTypes.bool  //default: true
+    visible: PropTypes.bool
 };
 
 export default DialogButton;
