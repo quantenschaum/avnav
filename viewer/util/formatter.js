@@ -7,9 +7,9 @@ import {extendCoordinate} from "ol/extent";
 import Helper from "./helper.js";
 import {OpenLocationCode} from "open-location-code";
 
-function pad(num, size) {
-    var s = '000000' + num;
-    return s.substr(s.length-size);
+function pad(num, size, pad='0') {
+    var s = (''+num).trim();
+    return pad.repeat(Math.max(0,size-s.length))+s;
 }
 
 /**
