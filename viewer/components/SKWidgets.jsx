@@ -6,7 +6,6 @@ import React from 'react';
 import Formatter from "../util/formatter";
 import PropTypes from "prop-types";
 import {WidgetFrame, WidgetProps} from "./WidgetBase";
-import {useKeyEventHandler} from "../util/GuiHelpers";
 
 const rad2deg=(rad,inDeg)=>{
     if (inDeg) return parseFloat(rad);
@@ -19,7 +18,6 @@ const DegreeFormatter = (value,inDeg)=> {
   };
 
 export const SKRollWidget=(props)=>{
-        useKeyEventHandler(props,"widget");
         let degreeArrow = "---";
         if (props.value !== undefined) {
             let value = DegreeFormatter(props.value, props.inDegree);

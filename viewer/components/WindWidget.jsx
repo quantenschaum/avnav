@@ -8,8 +8,6 @@ import Formatter from '../util/formatter';
 import keys from '../util/keys.jsx';
 import navcompute from '../nav/navcompute.js';
 import {WidgetFrame, WidgetHead, WidgetProps} from "./WidgetBase";
-import Helper from '../util/helper.js';
-import {useKeyEventHandler} from "../util/GuiHelpers";
 
 export const getWindData=(props)=>{
     let kind = props.kind;
@@ -51,7 +49,6 @@ export const getWindData=(props)=>{
 }
 
 const WindWidget = (props) => {
-    useKeyEventHandler(props, "widget");
     const names = {
         A: {
             speed: 'AWS',
@@ -66,7 +63,6 @@ const WindWidget = (props) => {
             angle: 'TWA'
         }
     }
-    let classes = "widget windWidget " + props.className || "";
     let wind = getWindData(props);
     var a180 = !(props.show360 || wind.suffix.endsWith('D'));
     var angle = Formatter.formatDirection(wind.windAngle,false,a180);
