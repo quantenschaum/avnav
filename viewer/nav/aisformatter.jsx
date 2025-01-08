@@ -33,7 +33,6 @@ const aisparam={
     heading: {
         headline: 'HDT',
         format: function (v) {
-            if (v.heading === undefined) return '---';
             return Formatter.formatDirection(v.heading);
         },
         unit: '°',
@@ -42,8 +41,7 @@ const aisparam={
     turn: {
         headline: 'ROT',
         format: function (v) {
-            if (v.turn === undefined) return '-';
-            return Formatter.formatDecimal(v.turn,1,0);
+            return Formatter.formatDecimal(v.turn,2,0);
         },
         unit: '°/min',
         classes: [AIS_CLASSES.A,AIS_CLASSES.B]
@@ -74,7 +72,6 @@ const aisparam={
     cpa: {
         headline: 'DCPA',
             format: function (v) {
-            if (v.cpa === undefined) return '----';
             return Formatter.formatDistance(v.cpa);
         },
         unit: 'nm',
@@ -82,18 +79,16 @@ const aisparam={
     tcpa: {
         headline: 'TCPA',
             format: function (v) {
-            if (v.tcpa === undefined) return "---------";
-            let tval = parseFloat(v.tcpa);
-            let sign = "";
-            if (tval < 0) {
-                sign = "-";
-                tval = -tval;
-            }
-            let h = Math.floor(tval / 3600);
-            let m = Math.floor((tval - h * 3600) / 60);
-            let s = tval - 3600 * h - 60 * m;
-            return sign + Formatter.formatDecimal(h, 2, 0).replace(" ", "0") + ':' + Formatter.formatDecimal(m, 2, 0).replace(" ", "0") + ':' + Formatter.formatDecimal(s, 2, 0).replace(" ", "0");
-        }
+              return Formatter.formatDecimal(v.tcpa/60,3,Math.abs(v.tcpa)>60?0:2);
+        },
+        unit: 'min',
+    },
+    bcpa: {
+        headline: 'BCPA',
+            format: function (v) {
+              return Formatter.formatDirection(v.bcpa);
+        },
+        unit: '°',
     },
     passFront: {
         headline: 'we pass',
@@ -101,8 +96,8 @@ const aisparam={
             if (!v.cpa) return "-";
             if (v.passFront !== undefined) {
                 if (v.passFront > 0) return "Front";
-                if (v.passFront < 0) return "Pass";
-                return "Back";
+                if (v.passFront < 0) return "Back";
+                return "Pass";
             }
             return "Done";
         }
@@ -163,9 +158,7 @@ const aisparam={
     status:{
         headline: 'Status',
         format: function(v){
-            if (v.status === undefined){
-                return "----";
-            }
+            if (v.status === undefined) return "----";
             let st=parseInt(v.status);
             switch (st){
                 case 0: return 'Under way using engine';
@@ -197,7 +190,7 @@ const aisparam={
                 let now=(new Date()).getTime();
                 age+=(now-v.receiveTime)/1000.0;
             }
-            return Formatter.formatDecimal(age,5,2);
+            return Formatter.formatDecimal(age,3,0);
         },
         unit: 's'
     },
@@ -242,7 +235,6 @@ const aisparam={
     length: {
         headline: 'Length',
         format: function(v){
-            if (v.length === undefined) return '---';
             return Formatter.formatDecimal(v.length,3)
         },
         unit: 'm'
@@ -250,7 +242,6 @@ const aisparam={
     beam: {
         headline: 'Beam',
         format: function(v){
-            if (v.beam === undefined) return '---';
             return Formatter.formatDecimal(v.beam,3);
         },
         unit: 'm'
@@ -258,7 +249,6 @@ const aisparam={
     draught: {
         headline: 'Draught',
         format: function(v){
-            if (v.draught === undefined) return '---';
             return Formatter.formatDecimal(v.draught,2,1);
         },
         unit: 'm',

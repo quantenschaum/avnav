@@ -27,14 +27,15 @@ const displayItems = [
     {name: 'status'},
     {name: 'destination'},
     {name: 'position'},
+    {name: 'headingTo'},
+    {name: 'distance'},
     {name: 'course'},
     {name: 'speed'},
     {name: 'heading'},
     {name: 'turn'},
-    {name: 'headingTo'},
-    {name: 'distance'},
     {name: 'cpa'},
     {name: 'tcpa'},
+    {name: 'bcpa'},
     {name: 'passFront', addClass: 'aisFront'},
     {name: 'length'},
     {name: 'beam'},
@@ -60,11 +61,19 @@ const createItem=(config,mmsi)=>{
             return null;
         }
         var unit = AisFormatter.getUnit(props.name);
+        var clazz = 'aisInfoRow';
+        var warning = props.current.warning && (key.includes('cpa') || key.includes('pass'));
+        let target = props.current;
+        let warningDist = globalStore.getData(keys.properties.aisWarningCpa);
+        let warningTime = globalStore.getData(keys.properties.aisWarningTpa);
+        if(key.includes('pass') && warning || 0 < target.tcpa && (key=='cpa' && target.cpa < warningDist || key=='tcpa' && target.tcpa < warningTime)) {
+          clazz += ' warning';
+        }
         return (
-        <div className="aisInfoRow">
-            <div className='label'>{AisFormatter.getHeadline(key)}</div>
-            <div className={cl}>{AisFormatter.format(key, props.current)}{unit && <span className='unit'>&thinsp;{unit}</span>}</div>
-        </div>
+          <div className={clazz}>
+              <div className='label'>{AisFormatter.getHeadline(key)}</div>
+              <div className={cl}>{AisFormatter.format(key, props.current)}{unit && <span className='unit'>&thinsp;{unit}</span>}</div>
+          </div>
         );
     },{
         storeKeys:storeKeys,
