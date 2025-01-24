@@ -1,8 +1,6 @@
 /**
  * Created by andreas on 20.11.16.
  */
-import EtaWidget from './EtaWidget.jsx';
-import TimeStatusWidget from './TimeStatusWidget.jsx';
 import AisTargetWidget from './AisTargetWidget.jsx';
 import ActiveRouteWidget from './ActiveRouteWidget.jsx';
 import EditRouteWidget from './EditRouteWidget.jsx';
@@ -15,7 +13,6 @@ import ZoomWidget from './ZoomWidget.jsx';
 import keys from '../util/keys.jsx';
 import AlarmWidget from './AlarmWidget.jsx';
 import RoutePointsWidget from './RoutePointsWidget.jsx';
-import DateTimeWidget from './DateTimeWidget.jsx';
 import {GaugeRadial} from './CanvasGauges.jsx';
 import UndefinedWidget from './UndefinedWidget.jsx';
 import {SKPitchWidget, SKRollWidget} from "./SKWidgets";
@@ -32,7 +29,16 @@ let widgetList=[
             value: keys.nav.gps.speed,
             isAverage: keys.nav.gps.speedAverageOn
         },
-        formatter:'formatSpeed'
+        formatter:'formatSpeed',
+        formatterParameters: ['kn'],
+        editableParameters: {
+            unit: false,
+        },
+        translateFunction: (props)=>{
+            return {...props,
+                unit: ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : props.unit,
+            }
+        }
     },
     {
         name: 'COG',
@@ -45,9 +51,9 @@ let widgetList=[
         },
         formatter: 'formatDirection',
         editableParameters: {
+            unit: false,
             formatterParameters: false
         }
-
     },
     {
         name: 'HDM',
@@ -59,6 +65,7 @@ let widgetList=[
         },
         formatter: 'formatDirection',
         editableParameters: {
+            unit: false,
             formatterParameters: false
         }
     },
@@ -72,6 +79,7 @@ let widgetList=[
         },
         formatter: 'formatDirection',
         editableParameters: {
+            unit: false,
             formatterParameters: false
         }
     },
@@ -81,22 +89,53 @@ let widgetList=[
         caption: 'BOAT',
         storeKeys:{
             value: keys.nav.gps.position,
-            isAverage: keys.nav.gps.positionAverageOn
+            isAverage: keys.nav.gps.positionAverageOn,
+            gpsValid: keys.nav.gps.valid,
         },
-        formatter: 'formatLonLats'
+        formatter: 'formatLonLats',
+        translateFunction: (props)=>{
+            return {...props,
+              unit: props.gpsValid?'OK':'ERROR',
+              addClass: props.gpsValid?'ok':'error',
+            }
+        },
 
     },
     {
         name: 'TimeStatus',
         caption: 'GPS',
-        wclass: TimeStatusWidget,
-        storeKeys: TimeStatusWidget.storeKeys
+        storeKeys:{
+            value: keys.nav.gps.rtime,
+            gpsValid: keys.nav.gps.valid,
+        },
+        formatter: 'formatTime',
+        translateFunction: (props)=>{
+            return {...props,
+              unit: props.gpsValid?'OK':'ERROR',
+              addClass: props.gpsValid?'ok':'error',
+            }
+        },
     },
     {
         name: 'ETA',
         caption: 'ETA',
-        wclass: EtaWidget,
-        storeKeys: EtaWidget.storeKeys
+        storeKeys:{
+          eta: keys.nav.wp.eta,
+          time:keys.nav.gps.rtime,
+          name: keys.nav.wp.name
+        },
+        formatter: 'formatTime',
+        translateFunction: (props)=>{
+            return {...props,
+              value: props.kind=='TTG'?new Date(props.eta-props.time):props.eta,
+              unit: props.name,
+              caption: props.kind,
+            }
+        },
+        editableParameters: {
+            unit: false,
+            kind: {type:'SELECT',list:['ETA','TTG'],default:'ETA'},
+        }
     },
     {
         name: 'DST',
@@ -106,7 +145,16 @@ let widgetList=[
         storeKeys:{
             value: keys.nav.wp.distance
         },
-        formatter: 'formatDistance'
+        formatter: 'formatDistance',
+        formatterParameters: ['nm'],
+        editableParameters: {
+            unit: false,
+        },
+        translateFunction: (props)=>{
+            return {...props,
+                unit: ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : props.unit,
+            }
+        }
 
     },
     {
@@ -119,6 +167,7 @@ let widgetList=[
         },
         formatter: 'formatDirection',
         editableParameters: {
+            unit: false,
             formatterParameters: false
         }
     },
@@ -130,7 +179,16 @@ let widgetList=[
         storeKeys: {
             value: keys.nav.wp.vmg
         },
-        formatter:'formatSpeed'
+        formatter:'formatSpeed',
+        formatterParameters: ['kn'],
+        editableParameters: {
+            unit: false,
+        },
+        translateFunction: (props)=>{
+            return {...props,
+                unit: ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : props.unit,
+            }
+        }
 
     },
     {
@@ -141,7 +199,16 @@ let widgetList=[
         storeKeys:{
             value: keys.nav.gps.waterSpeed
         },
-        formatter: 'formatSpeed'
+        formatter: 'formatSpeed',
+        formatterParameters: ['kn'],
+        editableParameters: {
+            unit: false,
+        },
+        translateFunction: (props)=>{
+            return {...props,
+                unit: ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : props.unit,
+            }
+        }
     },
     {
         name: 'WindAngle',
@@ -152,6 +219,7 @@ let widgetList=[
             windAngle:keys.nav.gps.windAngle,
             windAngleTrue: keys.nav.gps.trueWindAngle,
             windDirectionTrue: keys.nav.gps.trueWindDirection,
+            visible: keys.properties.showWind,
         },
         formatter: 'formatDirection',
         editableParameters: {
@@ -182,6 +250,7 @@ let widgetList=[
         storeKeys:{
             windSpeed:keys.nav.gps.windSpeed,
             windSpeedTrue: keys.nav.gps.trueWindSpeed,
+            visible: keys.properties.showWind,
         },
         formatter: 'formatSpeed',
         formatterParameters: ['kn'],
@@ -227,6 +296,7 @@ let widgetList=[
         },
         formatter: 'formatDirection',
         editableParameters: {
+            unit: false,
             formatterParameters: false
         }
     },
@@ -239,7 +309,15 @@ let widgetList=[
             value:keys.nav.anchor.distance
         },
         formatter: 'formatDistance',
-        formatterParameters: ['m']
+        formatterParameters: ['m'],
+        editableParameters: {
+            unit: false,
+        },
+        translateFunction: (props)=>{
+            return {...props,
+                unit: ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : props.unit,
+            }
+        }
     },
     {
         name: 'AnchorWatchDistance',
@@ -261,7 +339,16 @@ let widgetList=[
         storeKeys:{
             value:keys.nav.route.remain
         },
-        formatter: 'formatDistance'
+        formatter: 'formatDistance',
+        formatterParameters: ['nm'],
+        editableParameters: {
+            unit: false,
+        },
+        translateFunction: (props)=>{
+            return {...props,
+                unit: ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : props.unit,
+            }
+        }
     },
     {
         name: 'RteEta',
@@ -279,9 +366,16 @@ let widgetList=[
         caption: 'Time',
         storeKeys:{
             value:keys.nav.gps.rtime,
+            gpsValid: keys.nav.gps.valid,
             visible: keys.properties.showClock
         },
-        formatter: 'formatClock'
+        formatter: 'formatClock',
+        translateFunction: (props)=>{
+            return {...props,
+              unit: props.gpsValid?'OK':'ERROR',
+              addClass: props.gpsValid?'ok':'error',
+            }
+        },
     },
     {
         name: 'WpPosition',
@@ -341,6 +435,7 @@ let widgetList=[
             DBK: keys.nav.gps.depthBelowKeel,
             DBS: keys.nav.gps.depthBelowWaterline,
             DBT: keys.nav.gps.depthBelowTransducer,
+            visible: keys.properties.showDepth,
         },
         formatter: 'formatDistance',
         formatterParameters: ['m'],
@@ -375,7 +470,11 @@ let widgetList=[
     },
     {
         name: "DateTime",
-        wclass: DateTimeWidget
+        caption: 'Date/Time',
+        storeKeys:{
+            value:keys.nav.gps.rtime
+        },
+        formatter: 'formatDateTime'
     },
     {
         name: 'Empty',

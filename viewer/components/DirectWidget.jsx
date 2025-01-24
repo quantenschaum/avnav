@@ -9,17 +9,11 @@ import {WidgetFrame, WidgetProps} from "./WidgetBase";
 
 const DirectWidget=(wprops)=>{
     const props=wprops.translateFunction?{...wprops,...wprops.translateFunction({...wprops})}:wprops;
-    let val;
-    let vdef=props.default||'0';
-    if (props.value !== undefined) {
-        val=props.formatter?props.formatter(props.value):vdef+"";
-    }
-    else{
-        if (! isNaN(vdef) && props.formatter) val=props.formatter(vdef);
-        else val=vdef+"";
-    }
+    let val = props.value === undefined ? props.default : props.value;
+    val = props.formatter ? props.formatter(props.value) : val===undefined ? '-' : ''+val;
+    let addClass = props.addClass||'';
     return (
-        <WidgetFrame {...props} addClass="DirectWidget" >
+        <WidgetFrame {...props} addClass={'DirectWidget '+addClass} >
             <div className='widgetData'>
                 <Value value={val}/>
             </div>

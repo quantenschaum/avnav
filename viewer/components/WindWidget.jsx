@@ -72,9 +72,9 @@ const WindWidget = (props) => {
         <WidgetFrame {...props} addClass="windWidget" caption={undefined} unit={undefined}>
             {(props.mode === 'horizontal') ?
                 <React.Fragment>
-                    <WidgetHead caption={'W' + wind.suffix}/>
+                    <WidgetHead caption={'W' + wind.suffix} unit={'°/'+unit}/>
                     <div className="widgetData">
-                        {angle}<span className="unit">°</span>/{speed}<span className="unit">{unit}</span>
+                        {angle}/{speed}
                     </div>
                 </React.Fragment>
                 :
