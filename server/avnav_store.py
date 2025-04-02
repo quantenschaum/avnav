@@ -31,26 +31,28 @@ import time
 from avnav_util import *
 
 class Clock:
-  'simple clock with offset to time.time()'
-  def __init__(self,offset=0):
+  'simple clock with offset to a base clock'
+  def __init__(self,offset=0,base=time.monotonic):
     self._offset=offset
+    self._base=base
+    self._baseoffset=time.time()-base()
     self._lastchange=-1
 
   def __str__(self):
-    return f'Clock(offset={self._offset})'
+    return f'Clock({self.datetime()},offset={self._offset})'
 
   def time(self):
     'return time as epoch seconds as time.time()'
-    return max(self._lastchange,time.time()+self._offset)
+    return max(self._lastchange,self._base()+self._baseoffset+self._offset)
 
   def datetime(self):
-    'return naive datetime instance as datetime.now()'
-    return datetime.fromtimestamp(self.time())
+    'return datetime instance as datetime.now()'
+    return datetime.datetime.fromtimestamp(self.time(),datetime.timezone.utc)
 
   def set(self, now: float, beta: float =1, rewind=True):
     'set clock to now, apply correction partially for 0<beta<1, do not rewind if rewind=False'
     assert 0<=beta<=1
-    delta=now-(time.time()+self._offset)
+    delta=now-(self._base()+self._baseoffset+self._offset)
     self._lastchange=0 if rewind else self.time()
     self._offset+=beta*delta
 
