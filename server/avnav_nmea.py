@@ -159,11 +159,11 @@ class NMEAParser(object):
     gpsts=datetime.time(int(gpstime[0:2] or '0'),int(gpstime[2:4] or '0'),int(gpstime[4:6] or '0'),1000*int(gpstime[7:10] or '0'))
     AVNLog.ld("gpstime/gpsts",gpstime,gpsts)
     if gpsdate is None:
-      curdt=datetime.datetime.utcnow()
+      curdt=datetime.datetime.now(datetime.timezone.utc)
       gpsdt=datetime.datetime.combine(curdt.date(),gpsts)
       AVNLog.ld("curts/gpsdt before corr",curdt,gpsdt)
       #now correct the time if we are just changing from one day to another
-      #this assumes that our system time is not more then one day off...(???)
+      #this assumes that our system time is not more than one day off...(???)
       if (curdt - gpsdt) > datetime.timedelta(hours=12) and curdt.time().hour < 12:
         #we are in the evening and the gps is already in the morning... (and we accidently put it to the past morning)
         #so we have to hurry up to the next day...
@@ -354,6 +354,7 @@ class NMEAParser(object):
         #$--RMC,hhmmss.ss,A,llll.ll,a,yyyyy.yy,a,x.x,x.x,xxxx,x.x,a*hh
         #this includes current date
         valid = darray[2]=='A'
+        if not valid: return False
         if valid and all(darray[i] for i in (3,4,5,6)):
           rt[self.K_LAT.key]=self.nmeaPosToFloat(darray[3],darray[4])
           rt[self.K_LON.key]=self.nmeaPosToFloat(darray[5],darray[6])

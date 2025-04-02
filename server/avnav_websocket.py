@@ -78,7 +78,6 @@ class OutQueue:
       self.condition.release()
 
   def read(self,timeout=1):
-    now=time.time()
     loopCount=timeout*5
     while loopCount > 0:
       self.condition.acquire()

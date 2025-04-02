@@ -22,13 +22,37 @@
 #  DEALINGS IN THE SOFTWARE.
 #
 #  parts from this software (AIS decoding) are taken from the gpsd project
-#  so refer to this BSD licencse also (see ais.py) or omit ais.py 
+#  so refer to this BSD licencse also (see ais.py) or omit ais.py
 ###############################################################################
 
 
 import time
 
 from avnav_util import *
+
+class Clock:
+  'simple clock with offset to time.time()'
+  def __init__(self,offset=0):
+    self._offset=offset
+    self._lastchange=-1
+
+  def __str__(self):
+    return f'Clock(offset={self._offset})'
+
+  def time(self):
+    'return time as epoch seconds as time.time()'
+    return max(self._lastchange,time.time()+self._offset)
+
+  def datetime(self):
+    'return naive datetime instance as datetime.now()'
+    return datetime.fromtimestamp(self.time())
+
+  def set(self, now: float, beta: float =1, rewind=True):
+    'set clock to now, apply correction partially for 0<beta<1, do not rewind if rewind=False'
+    assert 0<=beta<=1
+    delta=now-(time.time()+self._offset)
+    self._lastchange=0 if rewind else self.time()
+    self._offset+=beta*delta
 
 
 #the main List of navigational items received
@@ -94,6 +118,7 @@ class AVNStore(object):
     self.__registerInternalKeys()
     for ck in self.CHANGE_COUNTER:
       self.updateChangeCounter(ck)
+    self.clock=Clock()
 
   def __registerInternalKeys(self):
     self.registerKey(self.BASE_KEY_AIS+".count","AIS count",self.__class__.__name__)
@@ -141,6 +166,7 @@ class AVNStore(object):
     self.__listLock.release()
     return True
 
+
   def setValue(self,key,value,source=None,priority=0,record=None,keepAlways=False,timestamp=None):
     """
     set a data value
@@ -177,7 +203,16 @@ class AVNStore(object):
               doUpdate=False
           if doUpdate:
             hasUpdate=True
-            self.__list[listKey]=AVNStore.DataEntry(dataValue, keepAlways=keepAlways,priority=priority,source=source)
+            self.__list[listKey]=AVNStore.DataEntry(dataValue, keepAlways=keepAlways,priority=priority,source=source,timestamp=timestamp)
+            if listKey=='gps.time':
+              age=time.monotonic()-timestamp
+              dt=datetime.datetime.fromisoformat(dataValue)
+              # print('set clock',dt,age)
+              if self.clock._lastchange<0:
+                self.clock.set(dt.timestamp()+age,rewind=True)
+              else:
+                self.clock.set(dt.timestamp()+age,0.1)
+              # print(self.clock)
           else:
             AVNLog.debug("AVNavData: keeping existing entry for %s",listKey)
         return hasUpdate
@@ -212,7 +247,7 @@ class AVNStore(object):
         if self.__useAisAge and "second" in data:
           sec=data.get("second",60) # 60=timestamp not available
           if 0<=sec<60: # use timestamp from ais seconds
-            delay = (now%60-sec)%60 # delay of message (up to 59s)
+            delay = (self.clock.time()%60-sec)%60 # delay of message (up to 59s)
             existing.timestamp -= delay # shift timestamp back
       else:
         del data["type"] # do not update type from static data
@@ -452,7 +487,7 @@ class AVNStore(object):
 
 
 
-  
+
   def __str__(self):
     rt="%s \n"%self.__class__.__name__
     idx=0
