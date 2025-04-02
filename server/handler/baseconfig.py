@@ -33,7 +33,7 @@ import time
 import traceback
 
 import avnav_handlerList
-from avnav_store import AVNStore
+from avnav_store import AVNStore, Clock
 from avnav_worker import AVNWorker, WorkerParameter, WorkerStatus
 from avnav_util import AVNLog, AVNUtil
 from avnav_nmea import NMEAParser
@@ -141,6 +141,7 @@ class AVNBaseConfig(AVNWorker):
     self.version=None
     self.startupError=None
     self.configInfo=None
+
   @classmethod
   def getConfigName(cls):
     return "AVNConfig"
@@ -204,7 +205,8 @@ class AVNBaseConfig(AVNWorker):
       if curGpsTime is None:
         return None,None
       dt=AVNUtil.gt(curGpsTime.value)
-      timestamp = dt.replace(tzinfo=datetime.timezone.utc).timestamp()
+      age=time.monotonic()-curGpsTime.timestamp
+      timestamp = dt.replace(tzinfo=datetime.timezone.utc).timestamp()+age
       return timestamp,curGpsTime.source
     except Exception as e:
       AVNLog.error("Exception when getting curGpsData: %s",traceback.format_exc())
@@ -241,7 +243,8 @@ class AVNBaseConfig(AVNWorker):
     lastchecktime=None
     gpsTime=TimeSource(TimeSource.SOURCE_GPS,self.fetchGpsTime,self.setInfo)
     ntpTime=TimeSource(TimeSource.SOURCE_NTP,self.fetchNtpTime,self.setInfo)
-    lastSource=gpsTime
+    lastSource=None
+    clockSource=None
     startutc=time.time()
     startupTime=time.monotonic()
     diffToMonotonic=startutc-startupTime
@@ -276,7 +279,7 @@ class AVNBaseConfig(AVNWorker):
       lat=None
       lon=None
       try:
-        lat=self.navdata.getSingleValue(NMEAParser.K_LAT.getKey(),includeInfo=True)
+        lat = self.navdata.getSingleValue(NMEAParser.K_LAT.getKey(),includeInfo=True)
         lon = self.navdata.getSingleValue(NMEAParser.K_LON.getKey(),includeInfo=True)
       except Exception as e:
         AVNLog.error("Exception when getting curGpsData: %s",traceback.format_exc())
@@ -335,10 +338,21 @@ class AVNBaseConfig(AVNWorker):
                 #try again to fetch NTP after switchtime
                 nextCheck=curmonotonic+switchtime
                 lastchecktime=curmonotonic
-          diff=nextCheck-curmonotonic
-          if diff < 0:
-            diff=0
+          diff=max(0,nextCheck-curmonotonic)
           self.setInfo(self.NEXT_CHILD,"in %d seconds"%diff,WorkerStatus.NMEA)
+
+
+          if checkSource and checkSource.isValid():
+            clock=self.navdata.clock
+            sourceChanged=clockSource!=checkSource
+            if sourceChanged:
+              clock.set(checkSource.getCurrent(),rewind=True)
+            else:
+              beta=1 if checkSource==ntpTime else 0.1
+              clock.set(checkSource.getCurrent(),beta)
+            clockSource=checkSource
+            print(clock,checkSource.externalSource,sourceChanged)
+
 
           if checkSource is not None and nextCheck <= curmonotonic:
             now=time.time()

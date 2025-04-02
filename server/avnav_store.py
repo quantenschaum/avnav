@@ -204,15 +204,6 @@ class AVNStore(object):
           if doUpdate:
             hasUpdate=True
             self.__list[listKey]=AVNStore.DataEntry(dataValue, keepAlways=keepAlways,priority=priority,source=source,timestamp=timestamp)
-            if listKey=='gps.time':
-              age=time.monotonic()-timestamp
-              dt=datetime.datetime.fromisoformat(dataValue)
-              # print('set clock',dt,age)
-              if self.clock._lastchange<0:
-                self.clock.set(dt.timestamp()+age,rewind=True)
-              else:
-                self.clock.set(dt.timestamp()+age,0.1)
-              # print(self.clock)
           else:
             AVNLog.debug("AVNavData: keeping existing entry for %s",listKey)
         return hasUpdate
