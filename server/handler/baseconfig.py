@@ -33,7 +33,7 @@ import time
 import traceback
 
 import avnav_handlerList
-from avnav_store import AVNStore, Clock
+from avnav_store import AVNStore
 from avnav_worker import AVNWorker, WorkerParameter, WorkerStatus
 from avnav_util import AVNLog, AVNUtil
 from avnav_nmea import NMEAParser
