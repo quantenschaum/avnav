@@ -27,23 +27,27 @@
 
 
 import time
+from collections import namedtuple
 
 from avnav_util import *
 
 class Clock:
+  state=namedtuple('state',('offset','changed'))
+
   'simple clock with offset to a base clock'
   def __init__(self,offset=0,base=time.monotonic):
-    self._offset=offset
     self._base=base
     self._baseoffset=time.time()-base()
-    self._lastchange=-1
+    # use immutable tuple for mutable state to ensure threadsafety through atomic updates without locking
+    self._state=self.state(offset, -1)
 
   def __str__(self):
-    return f'Clock({self.datetime()},offset={self._offset})'
+    return f'Clock({self.datetime()},offset={self._state.offset})'
 
   def time(self):
     'return time as epoch seconds as time.time()'
-    return max(self._lastchange,self._base()+self._baseoffset+self._offset)
+    s=self._state
+    return max(s.changed,self._base()+self._baseoffset+s.offset)
 
   def datetime(self):
     'return datetime instance as datetime.now()'
@@ -52,9 +56,10 @@ class Clock:
   def set(self, now: float, beta: float =1, rewind=True):
     'set clock to now, apply correction partially for 0<beta<1, do not rewind if rewind=False'
     assert 0<=beta<=1
-    delta=now-(self._base()+self._baseoffset+self._offset)
-    self._lastchange=0 if rewind else self.time()
-    self._offset+=beta*delta
+    s=self._state
+    delta=now-(self._base()+self._baseoffset+s.offset)
+    changed=0 if rewind else self.time()
+    self._state=self.state(s.offset+beta*delta,changed) # atomic state update
 
 
 #the main List of navigational items received
