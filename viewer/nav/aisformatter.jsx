@@ -185,12 +185,7 @@ const aisparam={
         headline: 'Age',
         format: function(v){
             if (v.age === undefined) return '----';
-            let age=v.age;
-            if (v.receiveTime !== undefined){
-                let now=(new Date()).getTime();
-                age+=(now-v.receiveTime)/1000.0;
-            }
-            return Formatter.formatDecimal(age,3,0);
+            return Formatter.formatDecimal(v.age,3,0);
         },
         unit: 's'
     },
@@ -332,6 +327,45 @@ const aisparam={
 
 };
 
+const aisProxyHandlerRo={
+    get(target,prop,receiver){
+        if (target[prop]!== undefined) return target[prop];
+        if (target.cpadata !== undefined && target.cpadata[prop] !== undefined) return target.cpadata[prop];
+        if (target.received !== undefined) return target.received[prop];
+    },
+    set(target,prop,value){
+      throw new Error("invalid set access to AIS data: "+prop+"="+value);
+    },
+    has(target,key){
+        if (key === Symbol.for("proxy")) return true;
+        return key in target || target.hasItem(key);
+    }
+};
+const aisProxyHandler={
+    get(target,prop,receiver){
+        if (target[prop]!== undefined) return target[prop];
+        if (target.cpadata !== undefined && target.cpadata[prop] !== undefined) return target.cpadata[prop];
+        if (target.received !== undefined) return target.received[prop];
+    },
+    has(target,key){
+        if (key === Symbol.for("proxy")) return true;
+        return key in target || target.hasItem(key);
+    }
+};
+
+export const isAisProxy=(obj)=>{
+    if (! (obj instanceof Object)) return false;
+    return Symbol.for("proxy") in obj;
+}
+/**
+ *
+ * @param aisobject
+ * @returns {Proxy<AISItem>}
+ */
+export const aisproxy=(aisobject,opt_writable)=>{
+    return opt_writable?new Proxy(aisobject,aisProxyHandler):new Proxy(aisobject,aisProxyHandlerRo);
+}
+
 const AisFormatter={
     /**
      * the formatter for AIS data
@@ -353,7 +387,13 @@ const AisFormatter={
         let d=aisparam[key];
         if (! d) return ;
         if (aisobject === undefined) return;
-        let rt=d.format(aisobject);
+        /**
+         * allow to use the new style {@link AISItem}
+         * we create a proxy and forward get access to either the cpadata or the received data if not at the base level
+         */
+
+        let op=isAisProxy(aisobject)?aisobject:aisproxy(aisobject);
+        let rt=d.format(op);
         if (inlcudeUnit && d.unit !== undefined){
             rt+=" "+d.unit;
         }
@@ -390,7 +430,7 @@ const AisFormatter={
         return rt;
     },
     shouldShow(key,item){
-        let cl=aisparam.clazz.format(item);
+        let cl=this.format('clazz',item);
         let param=aisparam[key];
         if (! param) return;
         if ( param.classes === undefined) return true;

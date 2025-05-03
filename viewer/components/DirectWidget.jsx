@@ -6,14 +6,25 @@ import React from "react";
 import PropTypes from 'prop-types';
 import Value from './Value.jsx';
 import {WidgetFrame, WidgetProps} from "./WidgetBase";
+import {useStringsChanged} from "../hoc/Resizable";
 
 const DirectWidget=(wprops)=>{
     const props=wprops.translateFunction?{...wprops,...wprops.translateFunction({...wprops})}:wprops;
-    let val = props.value === undefined ? props.default : props.value;
-    val = props.formatter ? props.formatter(props.value) : val===undefined ? '-' : ''+val;
-    let addClass = props.addClass||'';
+    let val;
+    let vdef=props.default||'0';
+    if (props.value !== undefined) {
+        val=props.formatter?props.formatter(props.value):vdef+"";
+    }
+    else{
+        if (! isNaN(vdef) && props.formatter) val=props.formatter(vdef);
+        else val=vdef+"";
+    }
+    const display={
+        value:val
+    };
+    const resizeSequence=useStringsChanged(display,wprops.mode==='gps')
     return (
-        <WidgetFrame {...props} addClass={'DirectWidget '+addClass} >
+        <WidgetFrame {...props} addClass="DirectWidget" resizeSequence={resizeSequence} >
             <div className='widgetData'>
                 <Value value={val}/>
             </div>

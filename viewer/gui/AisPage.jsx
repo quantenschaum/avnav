@@ -9,7 +9,7 @@ import keys from '../util/keys.jsx';
 import React from 'react';
 import PropertyHandler from '../util/propertyhandler.js';
 import Page from '../components/Page.jsx';
-import AisFormatter from '../nav/aisformatter.jsx';
+import AisFormatter, {aisproxy, isAisProxy} from '../nav/aisformatter.jsx';
 import assign from 'object-assign';
 import OverlayDialog from '../components/OverlayDialog.jsx';
 import Mob from '../components/Mob.js';
@@ -49,17 +49,9 @@ const fieldToLabel=(field)=>{
 };
 
 const aisSortCreator=(sortField)=>{
-    let warningDist = globalStore.getData(keys.properties.aisWarningCpa); // meter
-    let warningTime = globalStore.getData(keys.properties.aisWarningTpa); // seconds
     return (a,b)=> {
-        if (sortField=='prio') {
-            // pull warnings up
-            if (b.warning && !a.warning) return 1;
-            if (a.warning && !b.warning) return -1;
-            // combined relative distance of CPA, if passed use distance
-            let fa = a.tcpa<0 ? 2*a.distance/warningDist : a.tcpa/warningTime + a.cpa/warningDist;
-            let fb = b.tcpa<0 ? 2*b.distance/warningDist : b.tcpa/warningTime + b.cpa/warningDist;
-            return fa-fb;
+        if (sortField==='prio') {
+            return a.priority - b.priority;
         }
         let useFmt=sortField === 'shipname';
         var fa = useFmt?AisFormatter.format(sortField,a):a[sortField];
@@ -92,7 +84,7 @@ const pad=(val,len)=>{
 
 const sortDialog=(sortField)=>{
     for (let i in sortFields){
-        if (sortFields[i].value === sortField) sortFields[i].selected=true;
+        sortFields[i].selected=sortFields[i].value === sortField;
     }
     return OverlayDialog.selectDialogPromise('Sort Order',sortFields);
 };
@@ -102,7 +94,7 @@ const AisItem=(props)=>{
     let fmt=AisFormatter;
     let fb=fmt.format('passFront',props);
     let style={
-        color:props.color
+        color:PropertyHandler.getAisColor(props)
     };
     let cl=props.addClass||'';
     if (props.initialTarget) cl+=" initialTarget";
@@ -247,9 +239,9 @@ class AisPage extends React.Component{
         let trackingTarget=state.tracked;
         let items=[];
         let sortFunction=aisSortCreator(this.state.sortField||'cpa');
-        aisList.sort(sortFunction);
         for( let aisidx in aisList){
-            let ais=aisList[aisidx];
+            let ais={...aisList[aisidx]};
+            ais=aisproxy(ais,true);
             if (! ais.mmsi) continue;
             if (this.state.searchActive){
                 let found=false;
@@ -260,20 +252,20 @@ class AisPage extends React.Component{
                 });
                 if (! found) continue;
             }
-            let color=PropertyHandler.getAisColor({
+            ais.color=PropertyHandler.getAisColor({
                 nearest: ais.nearest,
                 warning: ais.warning,
                 //tracking: hasTracking && ais.tracking
             });
-            let item=assign({},ais,{color:color,key:ais.mmsi});
-            if (item.mmsi == trackingTarget){
-                item.selected=true;
+            if (ais.mmsi == trackingTarget){
+                ais.selected=true;
             }
-            if (this.initialMmsi && item.mmsi ===  this.initialMmsi){
-                item.initialTarget=true;
+            if (this.initialMmsi && ais.mmsi ===  this.initialMmsi){
+                ais.initialTarget=true;
             }
-            items.push(item);
+            items.push(ais);
         }
+        items.sort(sortFunction);
         return {itemList:items};
     };
     scrollWarning(ev){
@@ -335,10 +327,12 @@ class AisPage extends React.Component{
                 <AisList
                     itemClass={MemoAisItem}
                     onItemClick={(item)=> {
-                        this.props.history.setOptions({mmsi:item.mmsi});
-                        this.props.history.replace('aisinfopage', {mmsi: item.mmsi});
+                        let accessor=aisproxy(item);
+                        this.props.history.setOptions({mmsi:accessor.mmsi});
+                        this.props.history.replace('aisinfopage', {mmsi: accessor.mmsi});
                         }}
                     className="aisList"
+                    keyFunction={(item)=>item.mmsi}
                     {...aisListProps}
                     scrollable={true}
                     listRef={(list)=>{

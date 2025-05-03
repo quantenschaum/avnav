@@ -2,12 +2,13 @@
  * Created by andreas on 23.02.16.
  */
 
-import  React from "react";
+import React from "react";
 import PropTypes from 'prop-types';
 import keys from '../util/keys.jsx';
 import PropertyHandler from '../util/propertyhandler.js';
 import AisFormatter from '../nav/aisformatter.jsx';
 import {WidgetFrame, WidgetProps} from "./WidgetBase";
+import {useStringsChanged} from "../hoc/Resizable";
 
 
 const AisTargetWidget = (props) => {
@@ -17,23 +18,36 @@ const AisTargetWidget = (props) => {
     }
     let target = props.target || {};
     let small = (props.mode === "horizontal");
-    let aisProperties = {};
     let color = undefined;
     if (target.mmsi && target.mmsi !== "") {
-        aisProperties.warning = target.warning || false;
-        aisProperties.nearest = target.nearest || false;
-        aisProperties.tracking = (target.mmsi === props.trackedMmsi);
-        color = PropertyHandler.getAisColor(aisProperties);
+        color = PropertyHandler.getAisColor(target);
     }
     let front = AisFormatter.format('passFront', target);
+    let display={};
+    display.name=AisFormatter.format('nameOrmmsi', target);
+    if (target.tcpa > 0) {
+        display.cpa=AisFormatter.format('cpa', target);
+        display.tcpa=AisFormatter.format('tcpa', target);
+    }
+    else{
+        display.headingTo=AisFormatter.format('headingTo', target);
+    }
+    const dashMode=props.mode === "gps";
+    const resizeSequence=useStringsChanged(display,dashMode);
     if (target.mmsi !== undefined || props.mode === "gps" || props.isEditing) {
         const style = {...props.style, backgroundColor: color};
         return (
-            <WidgetFrame {...props} addClass="aisTargetWidget" style={style} onClick={click} unit={undefined} caption='AIS' >
+            <WidgetFrame {...props}
+                         addClass="aisTargetWidget"
+                         resizeSequence={resizeSequence}
+                         style={style}
+                         onClick={click}
+                         unit={undefined}
+                         caption='AIS' >
                 <div className="aisPart">
                     {!small &&
                     <div className="widgetData">
-                        <span className="aisData">{AisFormatter.format('nameOrmmsi', target)}</span>
+                        <span className="aisData">{display.name}</span>
                     </div>}
                     <div className="widgetData">
                         <span className='label'>{AisFormatter.getHeadline('distance')} </span>
@@ -45,12 +59,12 @@ const AisTargetWidget = (props) => {
                 <div className="aisPart">
                     <div className="widgetData">
                         <span className='label'>{AisFormatter.getHeadline('cpa')} </span>
-                        <span className="aisData">{AisFormatter.format('cpa', target)}</span>
+                        <span className="aisData">{display.cpa}</span>
                         <span className="unit">{AisFormatter.getUnit('cpa')}</span>
                     </div>
                     <div className="widgetData">
                         <span className='label'>{AisFormatter.getHeadline('tcpa')} </span>
-                        <span className="aisData"> {AisFormatter.format('tcpa', target)}</span>
+                        <span className="aisData"> {display.tcpa}</span>
                         <span className="unit">{AisFormatter.getUnit('tcpa')}</span>
                     </div>
                 </div>}
@@ -58,7 +72,7 @@ const AisTargetWidget = (props) => {
                 <div className="aisPart">
                     <div className="widgetData">
                         <span className='label'>{AisFormatter.getHeadline('headingTo')} </span>
-                        <span className="aisData">{AisFormatter.format('headingTo', target)}</span>
+                        <span className="aisData">{display.headingTo}</span>
                         <span className="unit">{AisFormatter.getUnit('headingTo')}</span>
                     </div>
                 </div>}

@@ -3,7 +3,6 @@
  */
 
 import navcompute from '../nav/navcompute.js';
-import {extendCoordinate} from "ol/extent";
 import Helper from "./helper.js";
 import {OpenLocationCode} from "open-location-code";
 
@@ -160,7 +159,7 @@ formatFloat.parameters=[
  * format a distance
  * show 99.9 for values < 100, show 999 for values >= 100, max 5
  * @param distance in m
- * @param unit: one of nm,m,km
+ * @param opt_unit one of nm,m,km
  */
 const formatDistance=function(distance,opt_unit){
     let number=parseFloat(distance);
@@ -283,7 +282,7 @@ const formatPressure=function(data,opt_unit){
             return (parseFloat(data)/100).toFixed(2)
         }
         if (opt_unit.toLowerCase() === 'bar') {
-            return formatDecimal(parseFloat(data)/100000,2,4);
+            return formatDecimal(parseFloat(data)/100000,2,4,false);
         }
     }catch(e){
         return "-----";
