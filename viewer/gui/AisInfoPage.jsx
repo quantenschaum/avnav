@@ -67,7 +67,9 @@ const createItem=(config,mmsi)=>{
         let warning = target.warning && (key.includes('cpa') || key.includes('pass'));
         let warningDist = globalStore.getData(keys.properties.aisWarningCpa);
         let warningTime = globalStore.getData(keys.properties.aisWarningTpa);
-        if(key.includes('pass') && warning || 0 < target.tcpa && (key=='cpa' && target.cpa < warningDist || key=='tcpa' && target.tcpa < warningTime)) {
+        if((key.includes('pass') && warning)
+            || (0 < target.tcpa && target.cpa < warningDist && (key=='cpa' || (key=='tcpa' && target.tcpa < warningTime)))
+        ){
           clazz += ' warning';
         }
         return (
@@ -85,7 +87,6 @@ const GuardedList=MapEventGuard(ItemList);
 class AisInfoPage extends React.Component{
     constructor(props){
         super(props);
-        let self=this;
         this.buttons=[
             {
                 name: 'AisNearest',
@@ -93,68 +94,72 @@ class AisInfoPage extends React.Component{
                     NavData.getAisHandler().setTrackedTarget(0);
                     let pos=NavData.getAisHandler().getAisPositionByMmsi(NavData.getAisHandler().getTrackedTarget());
                     if (pos) MapHolder.setCenter(pos);
-                    self.props.history.pop();
+                    this.props.history.pop();
                 }
             },
             {
                 name: 'AisInfoLocate',
                 onClick:()=>{
-                    if (!self.props.options || ! self.props.options.mmsi) return;
-                    NavData.getAisHandler().setTrackedTarget(self.props.options.mmsi);
-                    let pos=NavData.getAisHandler().getAisPositionByMmsi(self.props.options.mmsi);
+                    if (!this.props.options || ! this.props.options.mmsi) return;
+                    NavData.getAisHandler().setTrackedTarget(this.props.options.mmsi);
+                    let pos=NavData.getAisHandler().getAisPositionByMmsi(this.props.options.mmsi);
                     if (pos) {
                         MapHolder.setCenter(pos);
                         MapHolder.setGpsLock(false);
                     }
-                    self.props.history.pop();
+                    this.props.history.pop();
                 }
             },
             {
                 name: 'AisInfoHide',
                 onClick: ()=>{
-                    if (!self.props.options || ! self.props.options.mmsi) return;
-                    if (globalStore.getData(keys.gui.aisinfopage.hidden)){
-                        NavData.getAisHandler().unsetHidden(self.props.options.mmsi);
+                    let target=this.getTarget();
+                    if (! target) return;
+                    if (target.hidden){
+                        NavData.getAisHandler().unsetHidden(target.mmsi);
                     }
                     else {
-                        NavData.getAisHandler().setHidden(self.props.options.mmsi);
+                        NavData.getAisHandler().setHidden(target.mmsi);
                     }
-                    self.props.history.pop();
+                    this.props.history.pop();
                 },
                 storeKeys: {
-                    toggle: keys.gui.aisinfopage.hidden
-                }
+                    dummy: storeKeys
+                },
+                updateFunction: ()=>{
+                    let target=this.getTarget()||{};
+                    return {toggle:target.hidden};
+                },
+                disabled: !this.props.options || ! this.props.options.mmsi
 
             },
             {
                 name: 'AisInfoList',
                 onClick:()=>{
                     let mmsi=(this.props.options||{}).mmsi;
-                    if (! self.props.history.backFromReplace()) {
-                        self.props.history.replace('aispage', {mmsi: mmsi});
+                    if (! this.props.history.backFromReplace()) {
+                        this.props.history.replace('aispage', {mmsi: mmsi});
                     }
                 }
             },
             Mob.mobDefinition(this.props.history),
             {
                 name: 'Cancel',
-                onClick: ()=>{self.props.history.backFromReplace(true)}
+                onClick: ()=>{this.props.history.backFromReplace(true)}
             }
         ];
         this.checkNoTarget=this.checkNoTarget.bind(this);
         this.drawIcon=this.drawIcon.bind(this);
         this.timer=GuiHelpers.lifecycleTimer(this,this.checkNoTarget,5000,true);
-        let mmsi=(this.props.options||{}).mmsi;
-        if (mmsi) {
-            GuiHelpers.storeHelper(this, () => {
-                globalStore.storeData(keys.gui.aisinfopage.hidden,NavData.getAisHandler().isHidden(mmsi));
-            }, storeKeys, true)
-        }
     }
 
-    checkNoTarget(timerSequence){
+    getTarget(){
         let mmsi=this.props.options?this.props.options.mmsi:undefined;
-        if (! mmsi || ! NavData.getAisHandler().getAisByMmsi(mmsi)){
+        if (! mmsi) return;
+        return NavData.getAisHandler().getAisByMmsi(mmsi);
+    }
+    checkNoTarget(timerSequence){
+        if (! this.getTarget()){
             this.props.history.pop();
             return;
         }
@@ -172,23 +177,14 @@ class AisInfoPage extends React.Component{
         let rect=canvas.getBoundingClientRect();
         canvas.width=rect.width;
         canvas.height=rect.height;
-        MapHolder.aislayer.drawTargetSymbol(
-            drawing,
-            [rect.width/2,rect.height/2],
-            current,
-            (xy,rotation,distance)=>{
-                rotation=rotation/180*Math.PI;
-                return [
-                    rect.width/2*(1+Math.sin(rotation)),
-                    rect.height/2*(1-Math.cos(rotation))
-                ]
-            });
+        let [style,symbol,scale]=MapHolder.aislayer.getStyleEntry(current);
+        drawing.drawImageToContext([rect.width/2,rect.height/2],symbol.image,style);
+        //TODO: course vector
     }
 
     render(){
-        let self=this;
-        const Status = function (props) {
-            return <canvas className="status" ref={(ctx)=>{self.drawIcon(ctx,props.current)}}/>
+        const Status = (props)=> {
+            return <canvas className="status" ref={(ctx)=>{this.drawIcon(ctx,props.current)}}/>
         };
         const RenderStatus=Dynamic(Status);
         //gets mmsi
@@ -205,8 +201,8 @@ class AisInfoPage extends React.Component{
                     scrollable={true}
                     className="infoList"
                     onClick={()=>{
-                        if (! self.props.history.backFromReplace()) {
-                            self.props.history.pop();
+                        if (! this.props.history.backFromReplace()) {
+                            this.props.history.pop();
                         }
                     }}
                     />
@@ -217,7 +213,7 @@ class AisInfoPage extends React.Component{
 
         return (
             <Page
-                {...self.props}
+                {...this.props}
                 id="aisinfopage"
                 title="AIS Info"
                 mainContent={
@@ -225,7 +221,7 @@ class AisInfoPage extends React.Component{
                                 mmsi={this.props.options?this.props.options.mmsi:undefined}
                             />
                         }
-                buttonList={self.buttons}/>
+                buttonList={this.buttons}/>
         );
     }
 }
