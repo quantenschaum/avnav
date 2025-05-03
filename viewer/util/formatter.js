@@ -7,7 +7,7 @@ import Helper from "./helper.js";
 import {OpenLocationCode} from "open-location-code";
 
 function pad(num, size, pad='0') {
-    var s = (''+num).trim();
+    let s = (''+num).trim();
     return pad.repeat(Math.max(0,size-s.length))+s;
 }
 
@@ -19,13 +19,12 @@ function pad(num, size, pad='0') {
  */
 const formatLonLatsDecimal=function(coordinate,axis,format='DDM'){
     coordinate = Helper.to180(coordinate); // normalize to ±180°
-    var deg = Math.abs(coordinate);
+    let deg = Math.abs(coordinate);
+    let padding = 2;
+    let str = coordinate < 0 ? "S\u00A0" :"N\u00A0";
     if (axis == "lon") {
-        var padding = 3;
-        var str = coordinate < 0 ? "W" :"E";
-    } else {
-        var padding = 2;
-        var str = coordinate < 0 ? "S\u00A0" :"N\u00A0";
+        padding = 3;
+        str = coordinate < 0 ? "W" :"E";
     }
     if(format=='DD') {
       str += pad(deg.toFixed(5),padding+6) + "\u00B0";
@@ -209,7 +208,7 @@ const formatSpeed=function(speed,opt_unit){
     return formatFloat(number,3,1);
 };
 formatSpeed.parameters=[
-    {name:'unit',type:'SELECT',list:['kn','ms','kmh','bft','m/s','km/s'],default:'kn'}
+    {name:'unit',type:'SELECT',list:['kn','ms','kmh','bft','m/s','km/h'],default:'kn'}
 ];
 
 const formatDirection=function(dir,opt_rad,opt_180=false){
