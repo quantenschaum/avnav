@@ -33,6 +33,7 @@ import * as olExtent from 'ol/extent';
 import {XYZ as olXYZSource} from 'ol/source';
 import * as olTransforms  from 'ol/proj/transforms';
 import {Tile as olTileLayer} from 'ol/layer';
+import {MapLibreLayer} from '@geoblocks/ol-maplibre-layer';
 import {listenOnce,unlistenByKey} from 'ol/events';
 import olEventType from 'ol/events/EventType';
 import olImageTile from 'ol/src/ImageTile';
@@ -339,8 +340,8 @@ class AvnavChartSource extends ChartSourceBase{
             let finalSrc = basePart + this.encryptFunction(encryptPart);
             return finalSrc;
         }
-    }
-;
+    };
+
     parseLayerlist(layerdata, baseurl,upZoom) {
         let self = this;
         let chartKey = baseurl;
@@ -505,13 +506,22 @@ class AvnavChartSource extends ChartSourceBase{
             };
             let extent=rt.extent;
             if (self.chartEntry.opacity !== undefined) layerOptions.opacity=parseFloat(self.chartEntry.opacity);
-            let layer = new olTileLayer(layerOptions);
-            if (upZoom > 0) {
-                layer.createRenderer = () => new AvNavLayerRenderer(layer);
+            if(rt.layerurl.includes('.json')) {
+              var layer  = new MapLibreLayer({
+                title: rt.title,
+                opacity: layerOptions.opacity,
+                mapLibreOptions: {
+                  style: rt.layerurl,
+                },
+              });
+            } else {
+              var layer = new olTileLayer(layerOptions);
+              if (upZoom > 0) {
+                  layer.createRenderer = () => new AvNavLayerRenderer(layer);
+              }
             }
-            rt.isTileLayer=true;
-            layer.avnavOptions = rt;
             ll.push(layer);
+            layer.avnavOptions = rt;
         });
         //our avnav.xml has the layers in inverse order
         //maybe we should better sort based on zoomlevelboundings

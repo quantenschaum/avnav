@@ -16,7 +16,7 @@
   "browserslist": [
     "> 0.25%",
     "not dead",
-    "safari >= 6"
+    "safari >= 10"
   ],
   "author": "Andreas Vogel",
   "license": "MIT",
@@ -57,6 +57,7 @@
   },
   "dependencies": {
     "@braintree/browser-detection": "^2.0.0",
+    "@geoblocks/ol-maplibre-layer": "^1.0.3",
     "@openlayers/pepjs": "^0.5.4",
     "canvas-gauges": "git+https://github.com/wellenvogel/canvas-gauges#av20220223",
     "clone-deep": "^4.0.1",

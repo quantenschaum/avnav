@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<TileMapService version="1.0.0" >
+  <Title>OpenSemap/OpenStretmap</Title>
+  <TileMaps>
+    <TileMap
+      title="QMAP"
+      href="https://waddenzee.duckdns.org/style.json"
+      minzoom="6"
+      maxzoom="18"
+      projection="EPSG:4326">
+      <BoundingBox minlon="-180" minlat="-85" maxlon="180" maxlat="85" title="layer"/>
+      <TileFormat width="256" height="256" mime-type="x-webp" extension="webp" />
+    </TileMap>
+    <TileMap
+       title="OSM"
+       href="https://api.maptiler.com/maps/openstreetmap/style.json?key=get_your_own_OpIi9ZULNHzrESv6T2vL"
+       minzoom="4"
+       maxzoom="20">
+       <BoundingBox minlon="-180" minlat="-85" maxlon="180" maxlat="85" title="layer"/>
+       <TileFormat width="256" height="256" mime-type="x-png" extension="png" />
+    </TileMap>
+  </TileMaps>
+</TileMapService>
+
