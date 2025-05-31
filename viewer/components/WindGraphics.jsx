@@ -11,6 +11,7 @@ import {useKeyEventHandler} from '../util/GuiHelpers.js';
 import {getWindData} from "./WindWidget";
 import {useAvNavSortable} from "../hoc/Sortable";
 import {WidgetFrame, WidgetProps} from "./WidgetBase";
+import globalstore from "../util/globalstore";
 
 const normalColors={
     green:  'rgba(5, 128, 30, 0.57)',
@@ -117,7 +118,7 @@ const WindGraphics = (props) => {
         // Create text
         // Move the pointer from 0,0 to center position
         ctx.translate(width / 2, height / 2);
-        ctx.font = fontSize + "px Arial";
+        ctx.font = fontSize + "px "+globalstore.getData(keys.properties.fontBase);
         let a180 = !(props.show360 || current.suffix.endsWith('D'));
         let txt = Formatter.formatDirection(winddirection,false,a180);
         let xFactor = -0.8;

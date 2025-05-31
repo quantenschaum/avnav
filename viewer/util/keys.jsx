@@ -164,7 +164,8 @@ let keys={
             xte: V,
             vmg: V,
             position: V,
-            name: V
+            name: V,
+            server: V
         },
         anchor:{
             distance: V,
@@ -189,8 +190,6 @@ let keys={
         },
         routeHandler:{
             activeName: K,
-            routeForPage: K,
-            pageRouteIndex: K,
             editingRoute:K,
             editingIndex: K,
             useRhumbLine: K,
@@ -265,12 +264,10 @@ let keys={
         addresspage:{
             addressList:K
         },
-        routepage:{
-            initialName:K,
-        },
         aispage:{
             searchActive: K,
-            searchValue: K
+            searchValue: K,
+            sortField: K
         }
 
     },
@@ -346,7 +343,8 @@ let keys={
         aisUseCourseVector: new Property(true, "use Course Vector", PropertyType.CHECKBOX),
         aisCurvedVectors: new Property(true, "curved vectors", PropertyType.CHECKBOX),
         aisRelativeMotionVectorRange: new Property(0, "relative motion vector range (nm)", PropertyType.RANGE, [0, 100]),
-        aisShowEstimated: new Property(false,"show estimated position", PropertyType.CHECKBOX),
+        aisShowEstimated: new Property(true,"show estimated position", PropertyType.CHECKBOX),
+        aisCpaEstimated: new Property(true,"CPA/BRG from estimated",PropertyType.CHECKBOX),
         aisEstimatedOpacity: new Property(0.4,"estimated image opacity",PropertyType.RANGE,[0.1,1,0.05]),
         aisUseHeading: new Property(true,"use heading for direction",PropertyType.CHECKBOX),
         aisIconBorderWidth: new Property(3, "Border Width", PropertyType.RANGE, [0, 10]),
@@ -360,7 +358,6 @@ let keys={
         aisLostTime: new Property(600,"lost time (s)",PropertyType.RANGE, [1,3600]),
         aisCenterMode: new Property('both',"center for AIS range",PropertyType.LIST,['both','boat','map']),
         aisListLock: new Property(false,"lock ais list",PropertyType.CHECKBOX),
-        aisCpaEstimated: new Property(true,"CPA/BRG from estimated",PropertyType.CHECKBOX),
         aisMarkAllWarning: new Property(true,"mark ALL warning targets", PropertyType.CHECKBOX),
         clickTolerance: new Property(60, "Click Tolerance", PropertyType.RANGE, [10, 120]),
         maxAisErrors: new Property(3), //after that many errors AIS display will be switched off
@@ -383,6 +380,10 @@ let keys={
         maxGpsErrors: new Property(3), //after that much invalid responses/timeouts the GPS is dead
         routingServerError: new Property(true, "ServerError", PropertyType.CHECKBOX), //notify comm errors to server
         routingTextSize: new Property(14, "Text Size(px)", PropertyType.RANGE, [8, 36]), //in px
+        fontBase: new Property("Arial","Font Base",PropertyType.SELECT,["Arial","Verdana","Tahoma","Times New Roman","Georgia","Garamond"]),
+        fontShadowColor: new Property('#fff',"Font Shadow Color", PropertyType.COLOR),
+        fontShadowWidth: new Property(3,"font shadow width(px)",PropertyType.RANGE,[0,10]),
+        fontColor: new Property('#000',"font color",PropertyType.COLOR),
         routeCatchRange: new Property(50,"route point snap distance %", PropertyType.RANGE,[0,100]),
         statusErrorImage: new Property(redBubble),
         statusOkImage: new Property(greenBubble),

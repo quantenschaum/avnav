@@ -385,11 +385,11 @@ class AisLayer{
 
     setStyles() {
         this.textStyle = {
-            stroke: '#fff',
-            color: '#000',
-            width: 3,
+            stroke: globalStore.getData(keys.properties.fontShadowColor),
+            color: globalStore.getData(keys.properties.fontColor),
+            width: globalStore.getData(keys.properties.fontShadowWidth),
             fontSize: globalStore.getData(keys.properties.aisTextSize),
-            fontBase: 'Calibri,sans-serif',
+            fontBase: globalStore.getData(keys.properties.fontBase),
             offsetY: 15,
             align: 'left'
         };
@@ -438,7 +438,10 @@ class AisLayer{
             (statusSuffix !== undefined) ? styleMap[base + typeSuffix + statusSuffix] : undefined,
         );
         let style = cloneDeep(symbol.style);
-        if (!symbol.image || !style.size) return [undefined, undefined, 1];
+        if (!symbol.image || !style.size) {
+            //even the internal style has not been loaded yet...
+            return [undefined, undefined, 1];
+        }
         if (style.alpha !== undefined) {
             style.alpha = parseFloat(style.alpha);
             if (isNaN(style.alpha)) {
@@ -483,6 +486,7 @@ class AisLayer{
         let useCourseVector = !!target.courseVector;
         let target_hdg = (this.displayOptions.useHeading && target.heading !== undefined ? target.heading : target.course) || 0;
         let [style, symbol, scale] = this.getStyleEntry(target);
+        if (! style || ! symbol) return;
         if (!target.hidden) {
             const drawArc = (origin, center, radius, start, angle, style, shift_dir = 0, shift_dst = 0) => {
                 // pass origin to mitigate error due to projection for large radii
@@ -504,13 +508,19 @@ class AisLayer{
                         target.rmv.radius,
                         target.rmv.startAngle,
                         target.rmv.arc,
-                        {color: style.courseVectorColor, width: this.displayOptions.courseVectorWidth, dashed: true},
+                        {
+                            color: style.courseVectorColor,
+                            width: this.displayOptions.courseVectorWidth,
+                            dashed: true,
+                            alpha: style.alpha
+                        },
                         target.rmv.offsetDir, target.rmv.offsetDst);
                 } else {
                     drawing.drawLineToContext([this.pointToMap(target.rmv.start), this.pointToMap(target.rmv.end)], {
                         color: style.courseVectorColor,
                         width: this.displayOptions.courseVectorWidth,
-                        dashed: true
+                        dashed: true,
+                        alpha: style.alpha
                     });
                 }
             }
@@ -525,18 +535,30 @@ class AisLayer{
                         target.courseVector.radius,
                         target.courseVector.startAngle,
                         target.courseVector.arc,
-                        {color: style.courseVectorColor, width: this.displayOptions.courseVectorWidth});
+                        {
+                            color: style.courseVectorColor,
+                            width: this.displayOptions.courseVectorWidth,
+                            alpha: style.alpha
+                        });
                 } else {
                     drawing.drawLineToContext([
                         this.pointToMap(target.courseVector.start),
                         this.pointToMap(target.courseVector.end)
-                    ], {color: style.courseVectorColor, width: this.displayOptions.courseVectorWidth});
+                    ], {
+                        color: style.courseVectorColor,
+                        width: this.displayOptions.courseVectorWidth,
+                        alpha: style.alpha
+                    });
                 }
                 if (target.fromEstimated) {
                     drawing.drawLineToContext([
                         this.pointToMap(target.receivedPos),
                         this.pointToMap(target.courseVector.start)
-                    ], {color: style.courseVectorColor, width: this.displayOptions.courseVectorWidth})
+                    ], {
+                        color: style.courseVectorColor,
+                        width: this.displayOptions.courseVectorWidth,
+                        alpha: style.alpha
+                    })
                 }
             }
 

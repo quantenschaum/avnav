@@ -7,9 +7,14 @@ import globalStore from '../util/globalstore.jsx';
 import keys,{KeyHelper,PropertyType} from '../util/keys.jsx';
 import React, {useState} from 'react';
 import Page from '../components/Page.jsx';
-import Toast,{hideToast} from '../components/Toast.jsx';
+import Toast from '../components/Toast.jsx';
 import assign from 'object-assign';
-import OverlayDialog, {DialogButtons, DialogFrame, useDialogContext} from '../components/OverlayDialog.jsx';
+import {
+    DialogButtons,
+    DialogFrame, showDialog,
+    showPromiseDialog,
+    useDialogContext
+} from '../components/OverlayDialog.jsx';
 import LayoutHandler from '../util/layouthandler.js';
 import Mob from '../components/Mob.js';
 import LayoutFinishedDialog from '../components/LayoutFinishedDialog.jsx';
@@ -26,6 +31,7 @@ import loadSettings from "../components/LoadSettingsDialog";
 import propertyhandler from "../util/propertyhandler";
 import LocalStorage from '../util/localStorageManager';
 import leavehandler from "../util/leavehandler";
+import {ConfirmDialog} from "../components/BasicDialogs";
 
 const settingsSections={
     Layer:      [keys.properties.layers.base,keys.properties.layers.ais,keys.properties.layers.track,keys.properties.layers.nav,keys.properties.layers.boat,
@@ -41,7 +47,7 @@ const settingsSections={
         keys.properties.nightChartFade,keys.properties.dimFade,keys.properties.localAlarmSound,keys.properties.alarmVolume ,
         keys.properties.titleIcons, keys.properties.titleIconsGps, keys.properties.startLastSplit],
     AIS:        [keys.properties.aisDistance,keys.properties.aisCenterMode,keys.properties.aisWarningCpa,keys.properties.aisWarningTpa,
-        keys.properties.aisShowEstimated,keys.properties.aisEstimatedOpacity,
+        keys.properties.aisShowEstimated,keys.properties.aisEstimatedOpacity,keys.properties.aisCpaEstimated,
         keys.properties.aisMinDisplaySpeed,keys.properties.aisOnlyShowMoving,
         keys.properties.aisFirstLabel,keys.properties.aisSecondLabel,keys.properties.aisThirdLabel,
         keys.properties.aisTextSize,keys.properties.aisUseCourseVector,keys.properties.aisCurvedVectors,keys.properties.aisRelativeMotionVectorRange,keys.properties.style.aisNormalColor,
@@ -49,7 +55,7 @@ const settingsSections={
         keys.properties.aisIconBorderWidth,keys.properties.aisIconScale,keys.properties.aisClassbShrink,keys.properties.aisShowA,
         keys.properties.aisShowB,keys.properties.aisShowOther,keys.properties.aisUseHeading,
         keys.properties.aisReducedList,keys.properties.aisListUpdateTime, keys.properties.aisHideTime, keys.properties.aisLostTime,
-        keys.properties.aisCpaEstimated,keys.properties.aisMarkAllWarning],
+        keys.properties.aisMarkAllWarning],
     Navigation: [keys.properties.bearingColor,keys.properties.bearingWidth,keys.properties.navCircleColor,keys.properties.navCircleWidth,keys.properties.navCircle1Radius,keys.properties.navCircle2Radius,keys.properties.navCircle3Radius,
         keys.properties.navBoatCourseTime,keys.properties.boatIconScale,keys.properties.boatDirectionMode,
         keys.properties.boatDirectionVector,keys.properties.boatSteadyDetect,keys.properties.boatSteadyMax,
@@ -82,6 +88,8 @@ settingsConditions[keys.properties.aisCpaEstimated]=(values)=>
 settingsConditions[keys.properties.aisMinDisplaySpeed]=(values)=>
     (values||{})[keys.properties.aisOnlyShowMoving]||(values||{})[keys.properties.aisShowEstimated]
 settingsConditions[keys.properties.aisEstimatedOpacity]=(values)=>
+    (values||{})[keys.properties.aisShowEstimated]
+settingsConditions[keys.properties.aisCpaEstimated]=(values)=>
     (values||{})[keys.properties.aisShowEstimated]
 settingsConditions[keys.properties.boatSteadyMax]=(values)=>
     (values||{})[keys.properties.boatSteadyDetect]
@@ -518,7 +526,7 @@ class SettingsPage extends React.Component{
     confirmAbortOrDo(){
         if (this.hasChanges()) {
             return new Promise((resolve)=>{
-                OverlayDialog.confirm("discard changes?")
+                showPromiseDialog(undefined,(props)=><ConfirmDialog {...props} text={"discard changes?"}/>)
                     .then(()=>{
                         resolve(0);
                     })
@@ -631,9 +639,9 @@ class SettingsPage extends React.Component{
             }).catch(()=>{});
         }
         else{
-            OverlayDialog.showDialog(undefined,()=><LayoutFinishedDialog finishCallback={()=>this.changeItem({name:keys.properties.layoutName},LayoutHandler.name)}/> )
+            showDialog(undefined,()=><LayoutFinishedDialog finishCallback={()=>this.changeItem({name:keys.properties.layoutName},LayoutHandler.name)}/> )
         }
-    };
+    }
 
     resetData(){
         let values=assign({},this.defaultValues);

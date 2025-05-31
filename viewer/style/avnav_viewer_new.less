@@ -43,6 +43,7 @@ body{
   width: 100%;
   height: 100%;
   overflow: hidden;
+  position: relative;
 }
 .pageFrame{
   background-color: white;
@@ -124,17 +125,17 @@ body{
   right: 1em;
   top: 1em;
   z-index: 3;
-
-  .anchorWatchIcon {
-    background-color: red;
-    .maskImage('anchor.svg');
-  }
-
-  .disconnectedIcon {
-    background-color: red;
-    .maskImage('plug-disconnect.svg');
-  }
 }
+.anchorWatchIcon {
+  background-color: red;
+  .maskImage('anchor.svg');
+}
+
+.disconnectedIcon {
+  background-color: red;
+  .maskImage('plug-disconnect.svg');
+}
+
 
 
 .leftPart{
@@ -188,10 +189,13 @@ body{
 //----------------------------------------------------------------------------------------
 //dialogs
 //----------------------------------------------------------------------------------------
+.noEvents{
+  pointer-events: none;
+}
 .overlay_cover_active {
   background-color: rgba(0, 0, 0, 0.35);
   display: block;
-  position: fixed;
+  position: absolute;
   left: 0;
   top: 0;
   right: 0;
@@ -201,6 +205,10 @@ body{
   .flex-display();
   .flex-justify-content(space-around);
   .flex-align-items(center);
+}
+
+.dialogAnchor{
+  position: relative;
 }
 
 
@@ -228,17 +236,20 @@ body{
     .flex-direction(column);
   }
 
-
-  input, .input {
-    font-size: inherit;
-    font-family: inherit;
-    max-width: 100%;
+  .inputFrame{
     width: 20em;
     min-width: 5em;
+    max-width: 100%;
+    display: inline-block;
+  }
+
+  input, .input {
+    .inputFrame();
+    font-size: inherit;
+    font-family: inherit;
     border: none;
     border-bottom: 1px solid;
     .nightBorderColorGR();
-    display: inline-block;
     vertical-align: middle;
     line-height: 2em;
     min-height: 2em;
@@ -268,6 +279,11 @@ body{
   .wideLabel{
     .inputLabel();
     width: unset;
+  }
+  .iconInput .input,.colorSelector .input {
+    .flex-display();
+    .flex-direction(row);
+    .flex-align-items(center);
   }
 
 
@@ -331,7 +347,20 @@ body{
   .errorText{
     .nightForeFade(@colorRed)
   }
+  .paramButtons {
+    .flex-display();
+    .flex-direction(row);
+  }
 
+}
+
+.editParam{
+  &.changed{
+    font-weight: bold;
+  }
+  &.defaultValue{
+    font-style: italic;
+  }
 }
 
 .editWidgetDialog, .editPageDialog{
@@ -431,6 +460,16 @@ body{
     .nightBackFade(@colorSelection);
   }
 }
+.LoadRoutesDialog{
+  .listEntry{
+    .flex-align-items(center);
+    .icon{
+      margin-right: 0.8em;
+      width: 1em;
+      height: 1em;
+    }
+  }
+}
 
 .overlayElement{
   &.sortableHelper {
@@ -502,7 +541,7 @@ body{
 
 .editOverlayItemDialog{
   .inputLabel{
-    width: 9em;
+    width: 10em;
   }
 }
 .FeatureInfoDialog{
@@ -545,10 +584,6 @@ body{
 .EditHandlerDialog{
   .inputLabel{
     width: 9em;
-  }
-  .paramButtons {
-    .flex-display();
-    .flex-direction(row);
   }
 }
 .downloadFrame{
@@ -784,6 +819,11 @@ span.valuePrefix{
   background-repeat: no-repeat;
   background-position: center;
   .nightOPacity();
+  .widgetHead &{
+    margin:0;
+    height: 0.8em;
+    width: 0.8em;
+  }
 }
 .iconImage(@url){
   .icon();
@@ -992,7 +1032,9 @@ span.valuePrefix{
   }
 
 }
-
+.aisHidden{
+  opacity: 0.5;
+}
 #aispage{
   .aisListItem{
     .listEntry();
@@ -1057,48 +1099,36 @@ span.valuePrefix{
   }
 }
 
-#aisinfopage{
+@aisInfoSmall: 35em;
+@aisInfoNoIconHeight: 40em;
+.aisInfoDialog{
+  position: relative;
   .status{
-    left: 3em;
-    top: ( 2em + @headlineHeight)  ;
-    position: absolute;
     width: 100px;
     height:100px;
-  }
-  .smallDisplay & .status{
     display: block;
-    margin-left: 1em;
-    position: relative;
-    top: 0;
-    left: 0;
+    @media(max-width: @aisInfoSmall) {
+      @media (max-height: @aisInfoNoIconHeight) {
+        display: none;
+      }
+    }
   }
   .infoList{
     width: 100%;
+    height: 100%;
+    @media(max-width: @aisInfoSmall){
+      height: unset;
+    }
     max-width: 60em;
     margin-left: auto;
     margin-right: auto;
-    font-size: 1.2em;
     margin-top: 0.5em;
     .flex-grow(1);
     .label {
       display: inline-block;
-      text-align: right;
       padding-right: 1em;
       .mdText2();
-      padding-bottom: .5em;
-      width: 50%;
-    }
-    .smallDisplay & {
-      .label {
-        display: block;
-        text-align: left;
-        width: inherit;
-        margin-left: 1em;
-      }
-      .aisData{
-        width: inherit;
-        margin-left: 1em;
-      }
+      width: 6em;
     }
     .unit {
       font-weight: normal;
@@ -1107,11 +1137,19 @@ span.valuePrefix{
       display: inline-block;
       text-align: left;
       padding-bottom: .5em;
-      width: 50%;
+      width: 15em;
       font-weight: bold;
     }
-    .warning{
+    .aisWarning{
       color: @colorRed; //should also be ok for night mode as normal night color is dimmed to 60%
+    }
+  }
+  .dialogRow{
+    min-height: 0;
+    flex-shrink: 1;
+    overflow: auto;
+    @media(max-width: @aisInfoSmall){
+        .flex-direction(column-reverse)
     }
   }
 }
@@ -1251,45 +1289,6 @@ span.valuePrefix{
 
 }
 
-#routepage{
-  &.activeRoute .header{
-    .nightBackFade(@colorRed);
-  }
-  .routeCurrent {
-    background-color: #CFD8DC;
-    padding: 1em;
-    padding-right: 1.5em;
-    height: 5.2em;
-    position: relative;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
-    .routeName{
-      white-space: nowrap;
-      overflow: hidden;
-    }
-    .routeInfo{
-      .mdText2();
-      margin-top: 0.7em;
-    }
-    .more{
-      display: inline-block;
-      position: absolute;
-      right: 0;
-      top: 1em;
-      height: 2em;
-      width: 2em;
-    }
-
-  }
-
-}
-.editRouteName{
-  label{
-    display: inline-block;
-    margin-left: 1em;
-  }
-
-}
-
 #downloadpage{
   .itemMain {
     .flex-display();
@@ -1395,6 +1394,26 @@ span.valuePrefix{
   .edit{
     .flex(1);
     position: relative;
+  }
+}
+.EditRouteDialog{
+  &.activeRoute{
+    border-width: 3px;
+    border-style: solid;
+    padding: 5px;
+    .nightBorderFade(@colorRed);
+  }
+}
+.EditRoutePoints{
+  .routeInfoPoint {
+    .flex-display();
+    .flex-direction(row);
+    line-height: 2em;
+    .info{
+      width: 8em;
+      padding-top: 0.4em;
+      padding-bottom: 0.4em;
+    }
   }
 }
 

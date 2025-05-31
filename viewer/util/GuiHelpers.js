@@ -1,14 +1,10 @@
 import globalStore from '../util/globalstore.jsx';
-import keys from '../util/keys.jsx';
 import KeyHandler from './keyhandler.js';
-import LayoutHandler from './layouthandler.js';
 import assign from 'object-assign';
 import shallowcompare from "./compare";
 import Requests from "./requests";
 import base from "../base";
 import {useEffect, useRef, useState} from "react";
-
-
 
 
 const resizeElementFont=(el)=>{
@@ -123,6 +119,21 @@ const storeHelper=(thisref,dataCanged,storeKeys,opt_callImmediate)=>{
         dataCanged(globalStore.getMultiple(storeKeys));
     }
 };
+
+export const useStoreHelper=(callback,storeKeys,callImmediate,beforeRender)=>{
+    const setter=useRef();
+    if (beforeRender){
+        useState(()=>setter.current=globalStore.register(callback,storeKeys));
+    }
+    useEffect(() => {
+        if (! beforeRender){
+            setter.current=globalStore.register(callback,storeKeys);
+        }
+        return ()=>globalStore.deregister(setter.current);
+
+    }, []);
+    if (callImmediate) callback();
+}
 
 /**
  * get some data from the global store into our state
@@ -453,56 +464,6 @@ export const stateHelper=(thisref,initialValues,opt_namePrefix)=>{
     return rt;
 
 };
-/**
- * migration support for legacy code
- * with useState the state helper is not really necessary any more - but to migrate old code this method could be helpful
- * @param initialValues
- * @returns {*|{}|{getValue(*, *): *, getState(*): *, getValues(*): (any), isChanged(): boolean, setValue: *, setState: *, reset(): void, isItemChanged(*): *}|boolean}
- */
-export const useStateHelper=(initialValues)=>{
-    const [values,setValues]=useState(initialValues);
-    const [isChanged,setChanged]=useState(false);
-    return {
-        setValue:(key,value)=>{
-            if (values[key] === value) return;
-            let nv={};
-            nv[key]=value;
-            let nvalues={...values,nv};
-            nvalues[key]=value;
-            setValues(nvalues);
-            setChanged(true);
-        },
-        setState:(partialState,opt_overwrite)=>{
-            let nvalues=opt_overwrite?partialState:{...values,...partialState};
-            setChanged(!shallowcompare(values,initialValues));
-            setValues(nvalues);
-        },
-        isChanged(){
-            return isChanged;
-        },
-        isItemChanged(name){
-            return ! shallowcompare(values[name],initialValues[name]);
-        },
-        reset(){
-            setValues(initialValues);
-            setChanged(false);
-        },
-        getValues(opt_copy){
-            if (opt_copy){
-                return {...values};
-            }
-            return values;
-        },
-        getState(opt_copy){
-            return opt_copy?{...values}:values;
-        },
-        getValue(key,opt_default){
-            let rt=values[key];
-            if (rt !== undefined) return rt;
-            return opt_default;
-        }
-    }
-}
 
 const getServerCommand=(name)=>{
     return Requests.getJson({

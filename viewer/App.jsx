@@ -8,12 +8,10 @@ import MainPage from './gui/MainPage.jsx';
 import InfoPage from './gui/InfoPage.jsx';
 import GpsPage from './gui/GpsPage.jsx';
 import AisPage from './gui/AisPage.jsx';
-import AisInfoPage from './gui/AisInfoPage.jsx';
 import AddOnPage from './gui/AddOnPage.jsx';
 import AddressPage from './gui/AddressPage.jsx';
 import StatusPage from './gui/StatusPage.jsx';
 import WpaPage from './gui/WpaPage.jsx';
-import RoutePage from './gui/RoutePage.jsx';
 import DownloadPage from './gui/DownloadPage.jsx';
 import SettingsPage from './gui/SettingsPage.jsx';
 import NavPage from './gui/NavPage.jsx';
@@ -22,10 +20,9 @@ import WarningPage from './gui/WarningPage.jsx';
 import ViewPage from './gui/ViewPage.jsx';
 import AddonConfigPage from './gui/AddOnConfigPage.jsx';
 import ImporterPage from "./gui/ImporterPage";
-import OverlayDialog, {
+import {
     DialogContext,
-    GlobalDialogDisplay,
-    setGlobalContext,
+    setGlobalContext, showPromiseDialog,
     useDialog
 } from './components/OverlayDialog.jsx';
 import globalStore from './util/globalstore.jsx';
@@ -54,6 +51,7 @@ import leavehandler from "./util/leavehandler"; //triggers querySplitMode
 import fullscreen from "./components/Fullscreen";
 import mapholder from "./map/mapholder";
 import 'drag-drop-touch';
+import {ConfirmDialog} from "./components/BasicDialogs";
 
 
 const DynamicSound=Dynamic(SoundHandler);
@@ -102,12 +100,10 @@ const pages={
     infopage: InfoPage,
     gpspage: GpsPage,
     aispage: AisPage,
-    aisinfopage:AisInfoPage,
     addonpage:AddOnPage,
     addresspage:AddressPage,
     statuspage:StatusPage,
     wpapage:WpaPage,
-    routepage:RoutePage,
     downloadpage:DownloadPage,
     settingspage:SettingsPage,
     navpage: NavPage,
@@ -147,6 +143,7 @@ class Router extends Component {
                     history={this.props.history}
                     small={small}
                     isEditing={this.props.isEditing}
+                    windowDimensions={this.props.windowDimensions}
                 />
             </div>
     }
@@ -192,9 +189,10 @@ const MainBody = ({location, options, history, nightMode}) => {
             <DynamicRouter
                 storeKeys={{
                     sequence: keys.gui.global.propertySequence,
-                    dimensions: keys.gui.global.windowDimensions,
+                    windowDimensions: keys.gui.global.windowDimensions,
                     dim: keys.gui.global.dimActive,
                     isEditing: keys.gui.global.layoutEditing,
+                    layoutSequence: keys.gui.global.layoutSequence,
                     ...keys.gui.capabilities
                 }}
                 location={location}
@@ -482,9 +480,9 @@ class App extends React.Component {
             return;
         }
         if (this.serverVersion === newVersion)return;
-        OverlayDialog.confirm("The server version has changed from "+
+        showPromiseDialog(undefined,(props)=><ConfirmDialog {...props} text={"The server version has changed from "+
             this.serverVersion+
-            " to "+newVersion+". Would you like to reload?",undefined,"Server version change")
+            " to "+newVersion+". Would you like to reload?"} title={"Server version change"}/>)
             .then(()=>{
                 LeaveHandler.stop();
                 window.location.replace(window.location.href);

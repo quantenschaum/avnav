@@ -69,6 +69,8 @@
     .flex(1);
     min-width: 0;
     min-height: 0;
+    .flex-display();
+    .flex-direction(column);
   }
 }
 //----- dashboard pages (gps page) ------
@@ -232,7 +234,37 @@
   &.Position, &.WpPosition{
     .smallWidget();
     .widgetData{
+      text-align: center;
       font-family: monospace;
+    }
+  }
+  &.timeStatusWidget{
+    .smallWidget(@size1);
+    .status{
+      width: 1.5em;
+      height: 1.5em;
+      text-align: center;
+      margin-left: auto;
+      margin-right: auto;
+      display: block;
+    }
+    .widgetData{
+      text-align: center;
+      margin-top: unset;
+      margin-left: auto;
+      margin-right: auto;
+    }
+  }
+  &.etaWidget{
+    .smallWidget(@size1);
+    .widgetData{
+      text-align: center;
+      margin-left: auto;
+      margin-right: auto;
+      margin-top: unset;
+      &.markerName{
+        margin-top: 0;
+      }
     }
   }
   &.aisTargetWidget{
@@ -254,6 +286,14 @@
       .flex-direction(column);
       .flex(1);
     }
+    .aisSmall {
+      .flex-display();
+      .flex-direction(row);
+      .aisParts {
+        flex-grow: 1;
+      }
+    }
+
   }
 
   &.activeRouteWidget{
