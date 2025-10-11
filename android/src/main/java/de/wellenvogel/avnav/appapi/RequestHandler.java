@@ -3,6 +3,8 @@ package de.wellenvogel.avnav.appapi;
 import android.content.SharedPreferences;
 import android.location.Location;
 import android.net.Uri;
+import android.os.SystemClock;
+import android.util.Log;
 import android.view.View;
 import android.webkit.MimeTypeMap;
 
@@ -16,13 +18,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.URI;
-import java.net.URISyntaxException;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -52,17 +50,11 @@ public class RequestHandler {
     public static final String INTERNAL_URL_PREFIX ="http://assets";
     public static final String ROOT_PATH="/viewer";
     protected static final String NAVURL="viewer/avnav_navi.php";
-    private SimpleDateFormat dateFormat=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSSZ");
     GpsService service;
     private SharedPreferences preferences;
     private MimeTypeMap mime = MimeTypeMap.getSingleton();
-    private final Object handlerMonitor =new Object();
 
-    private Thread chartHandler=null;
-    private boolean chartHandlerRunning=false;
-    private final Object chartHandlerMonitor=new Object();
-
-    private ChartHandler gemfHandler;
+    private ChartHandler chartHandler;
     private LayoutHandler layoutHandler;
     private SettingsHandler settingsHandler;
     private AddonHandler addonHandler;
@@ -81,6 +73,8 @@ public class RequestHandler {
     public static String TYPE_CONFIG="config";
     public static String TYPE_REMOTE="remotechannels";
 
+
+    static final String LOGPRFX="AvNav:requestHandler";
 
     public static class TypeItemMap<VT> extends HashMap<String, AvnUtil.KeyValue<VT>>{
         public TypeItemMap(AvnUtil.KeyValue<VT>...list){
@@ -133,6 +127,22 @@ public class RequestHandler {
         }
     }
 
+    public static abstract class NavRequestHandlerBase implements INavRequestHandler{
+        /**
+         * list the items
+         * @return a list of items
+         * @param uri
+         * @param serverInfo
+         */
+        public JSONObject handleListExtended(Uri uri, RequestHandler.ServerInfo serverInfo) throws Exception{
+            return RequestHandler.getReturn(new AvnUtil.KeyValue("items",handleList(uri, serverInfo)));
+        }
+
+        @Override
+        public JSONArray handleList(Uri uri, ServerInfo serverInfo) throws Exception {
+            return new JSONArray();
+        }
+    }
 
     static interface LazyHandlerAccess{
         INavRequestHandler getHandler();
@@ -181,15 +191,14 @@ public class RequestHandler {
         return addonHandler;
     }
     public ChartHandler getChartHandler(){
-        return gemfHandler;
+        return chartHandler;
     }
 
     public RequestHandler(GpsService service){
+        AvnLog.i(LOGPRFX,"Construct");
         this.service = service;
-        this.gemfHandler =new ChartHandler(service,this);
-        this.gemfHandler.updateChartList();
+        this.chartHandler =new ChartHandler(service,this);
         this.addonHandler= new AddonHandler(service,this);
-        startHandler();
         layoutHandler=new LayoutHandler(service,  "viewer/layout",
                 new File(getWorkDir(),typeDirs.get(TYPE_LAYOUT).value.getPath()));
         handlerMap.put(TYPE_LAYOUT, new LazyHandlerAccess() {
@@ -221,7 +230,7 @@ public class RequestHandler {
         handlerMap.put(TYPE_CHART, new LazyHandlerAccess() {
             @Override
             public INavRequestHandler getHandler() {
-                return gemfHandler;
+                return chartHandler;
             }
         });
         try{
@@ -292,7 +301,7 @@ public class RequestHandler {
                 return null;
             }
         });
-
+        AvnLog.i(LOGPRFX,"Construct done");
     }
 
     private INavRequestHandler getTrackWriter() {
@@ -308,33 +317,6 @@ public class RequestHandler {
         return access.getHandler();
     }
 
-    void startHandler(){
-        synchronized (handlerMonitor) {
-            if (chartHandler == null) {
-                chartHandlerRunning=true;
-                chartHandler = new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        AvnLog.i("RequestHandler: chartHandler thread is starting");
-                        while (chartHandlerRunning) {
-                            gemfHandler.updateChartList();
-                            try {
-                                synchronized (chartHandlerMonitor){
-                                    chartHandlerMonitor.wait(5000);
-                                }
-                            } catch (InterruptedException e) {
-                                break;
-                            }
-                        }
-                        AvnLog.i("RequestHandler: chartHandler thread is stopping");
-                    }
-                });
-                chartHandler.setDaemon(true);
-                chartHandler.start();
-            }
-        }
-
-    }
     RouteHandler getRouteHandler(){
         GpsService service=getGpsService();
         if (service == null) return null;
@@ -392,7 +374,8 @@ public class RequestHandler {
                 }
                 ExtendedWebResourceResponse rt=tryDirectRequest(uri,method);
                 if (rt != null) return rt;
-                InputStream is= service.getAssets().open(path);
+                InputStream is= (view != null)?view.getContext().getAssets().open(path):service.getAssets().open(path);
+                Log.i(LOGPRFX,String.format("loading asset %s from %s (%d avail)",path,Thread.currentThread().getId(),is.available()));
                 return new ExtendedWebResourceResponse(-1,mimeType(path),"",is);
             } catch (Throwable e) {
                 e.printStackTrace();
@@ -504,7 +487,9 @@ public class RequestHandler {
         return handleNavRequest(uri,postData,null);
     }
     ExtendedWebResourceResponse handleNavRequest(Uri uri, PostVars postData,ServerInfo serverInfo) throws Exception {
-        return handleNavRequestInternal(uri,postData,serverInfo).getResponse();
+        NavResponse resp= handleNavRequestInternal(uri,postData,serverInfo);
+        if (resp == null) return null;
+        return resp.getResponse();
     }
     static class NavResponse{
         private ExtendedWebResourceResponse response;
@@ -522,6 +507,7 @@ public class RequestHandler {
         Object getJson(){return jsonResponse;}
     }
     NavResponse handleNavRequestInternal(Uri uri, PostVars postData,ServerInfo serverInfo) throws Exception {
+        long start=SystemClock.uptimeMillis();
         if (uri.getPath() == null) return null;
         String remain=uri.getPath();
         if (remain.startsWith("/")) remain=remain.substring(1);
@@ -558,42 +544,6 @@ public class RequestHandler {
                     o.put("status","no gps service");
                 }
                 fout=o;
-            }
-            if (type.equals("track")){
-                handled=true;
-                if (getGpsService() != null) {
-                    String intervals = uri.getQueryParameter("interval");
-                    String maxnums = uri.getQueryParameter("maxnum");
-                    long interval = 60000;
-                    if (intervals != null) {
-                        try {
-                            interval = 1000*Long.parseLong(intervals);
-                        } catch (NumberFormatException i) {
-                        }
-                    }
-                    int maxnum = 60;
-                    if (maxnums != null) {
-                        try {
-                            maxnum = Integer.parseInt(maxnums);
-                        } catch (NumberFormatException i) {
-                        }
-                    }
-                    ArrayList<Location> track=getGpsService().getTrack(maxnum, interval);
-                    //the returned track is inverse order, i.e. the newest entry comes first
-                    JSONArray arr=new JSONArray();
-                    for (int i=track.size()-1;i>=0;i--){
-                        Location l=track.get(i);
-                        JSONObject e=new JSONObject();
-                        e.put("ts",l.getTime()/1000.0);
-                        e.put("time",dateFormat.format(new Date(l.getTime())));
-                        e.put("lon",l.getLongitude());
-                        e.put("lat",l.getLatitude());
-                        e.put("course",l.getBearing());
-                        e.put("speed",l.getSpeed());
-                        arr.put(e);
-                    }
-                    fout=arr;
-                }
             }
             if (type.equals("ais")) {
                 handled=true;
@@ -633,8 +583,13 @@ public class RequestHandler {
                 String dirtype=uri.getQueryParameter("type");
                 INavRequestHandler handler=getHandler(dirtype);
                 if (handler != null){
-                    handled=true;
-                    fout=getReturn(new AvnUtil.KeyValue<JSONArray>("items",handler.handleList(uri, serverInfo)));
+                    if (handler instanceof NavRequestHandlerBase){
+                        handled=true;
+                        fout=((NavRequestHandlerBase)handler).handleListExtended(uri,serverInfo);
+                    }
+                    else {
+                        fout = getReturn(new AvnUtil.KeyValue<JSONArray>("items", handler.handleList(uri, serverInfo)));
+                    }
                 }
 
             }
@@ -652,6 +607,7 @@ public class RequestHandler {
                         resp = handler.handleDownload(name, uri);
                     }catch (Exception e){
                         AvnLog.e("error in download request "+uri.getPath(),e);
+                        return null;
                     }
                 }
                 if (!handled && dltype != null && dltype.equals("alarm") && name != null) {
@@ -800,7 +756,7 @@ public class RequestHandler {
             if (type.equals("api")){
                 try {
                     String apiType = AvnUtil.getMandatoryParameter(uri, "type");
-                    RequestHandler.LazyHandlerAccess handler = handlerMap.get(apiType);
+                    LazyHandlerAccess handler = handlerMap.get(apiType);
                     if (handler == null || handler.getHandler() == null ) throw new Exception("no handler for api request "+apiType);
                     JSONObject resp=handler.getHandler().handleApiRequest(uri,postData, serverInfo);
                     if (resp == null){
@@ -815,7 +771,13 @@ public class RequestHandler {
 
             }
             if (!handled){
-                AvnLog.d(Constants.LOGPRFX,"unhandled nav request "+type);
+                AvnLog.d(LOGPRFX,"unhandled nav request "+type);
+            }
+            long done=SystemClock.uptimeMillis();
+            if ((done-start) > 3000){
+                long dummy=done-start;
+                dummy=dummy+1;
+                AvnLog.d(LOGPRFX,"long navrequest "+type+" duration: "+dummy);
             }
             if (fout != null) return new NavResponse(fout);
             return new NavResponse(getErrorReturn("request not handled"));
@@ -859,20 +821,7 @@ public class RequestHandler {
 
 
     public void stop(){
-        synchronized (handlerMonitor) {
-            if (chartHandler != null){
-                chartHandlerRunning=false;
-                synchronized (chartHandlerMonitor){
-                    chartHandlerMonitor.notifyAll();
-                }
-                chartHandler.interrupt();
-                try {
-                    chartHandler.join(1000);
-                } catch (InterruptedException e) {
-                }
-                chartHandler=null;
-            }
-        }
+        if (chartHandler != null) chartHandler.stop();
     }
 
 

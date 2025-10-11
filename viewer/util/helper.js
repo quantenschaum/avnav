@@ -4,6 +4,7 @@
  */
 
 import compare from './compare';
+
 /**
  *
  * @constructor
@@ -17,7 +18,8 @@ Helper.endsWith=function(str, suffix) {
 };
 
 Helper.startsWith=function(str, prefix) {
-    return (str.indexOf(prefix, 0) == 0);
+    if (! str) return false;
+    return (str.indexOf(prefix, 0) === 0);
 };
 
 Helper.addEntryToListItem=function(list,keyname,keyvalue,key,value){
@@ -186,6 +188,12 @@ export const concatsp=(...args)=>{
 export const unsetOrTrue=(item)=>{
     return !!(item === undefined || item);
 }
+export const isset=(item,opt_empty)=>{
+    if (item === undefined) return false;
+    if (! opt_empty) return true;
+    if (item !== '') return true;
+    return false;
+}
 export const now=()=>{
     return (new Date()).getTime();
 }
@@ -205,11 +213,106 @@ export const iterate=(object,callback)=>{
     }
     callback(object);
 }
+export const getNameAndExt=(fn)=>{
+    if (typeof(fn) !== 'string' || ! fn) return [fn+'',''];
+    const x=fn.lastIndexOf('.');
+    if (x >= 0){
+        return [fn.substring(0,x),fn.substring(x+1)]
+    }
+    return [fn,''];
+}
+const injectDateIntoUrl=(oldurl)=>{
+    let url=oldurl.protocol+"//"+oldurl.host+oldurl.pathname;
+    const newTag='_='+encodeURIComponent((new Date).getTime());
+    if (oldurl.search){
+        let hasReplaced=false;
+        let add=oldurl.search.replace(/[?&]_=[^&#]*/,(m)=>{
+            hasReplaced=true;
+            return m.replace(/_=.*/,newTag);
+        })
+        if (! hasReplaced){
+            add+="&"+newTag;
+        }
+        url+=add;
+    }
+    else{
+        url+="?"+newTag;
+    }
+    if (oldurl.hash){
+        url+=oldurl.hash;
+    }
+    return url;
+}
+export const reloadPage=()=>{
+    let url=injectDateIntoUrl(window.location);
+    window.location.replace(url);
+}
+export const isObject = (value) => {
+    return typeof value === 'object'
+        && value !== null
+        && !Array.isArray(value)
+        && !(value instanceof RegExp)
+        && !(value instanceof Date)
+        && !(value instanceof Set)
+        && !(value instanceof Map)
+}
+export const injectav=(obj)=>{
+    if (obj === undefined){ obj={};}
+    if (! isObject(obj)){ throw new Error("expecting an object or undefined for injectav, found "+typeof(obj)+ ": "+obj);}
+    if (obj.avnav === undefined){ obj.avnav = {};}
+    if (! isObject(obj.avnav)){ throw new Error("injectav: avnav exists, no object: "+typeof(obj.avnav)) ;}
+    return obj;
+}
+export const avitem=(obj,itemName='item',defaultv={})=>{
+    const rt=injectav(obj).avnav[itemName];
+    if (rt === undefined){ return defaultv;}
+    return rt
+}
+export const setav=(obj,avdata)=>{
+    if (! isObject(avdata)){ throw new Error("setav: expecting an object as data, got "+typeof(avdata)+": "+avdata);}
+    const av=injectav(obj);
+    av.avnav={...av.avnav,...avdata};
+    return av;
+}
+
+export const loadJs=(url)=>{
+    let nUrl=injectDateIntoUrl(new URL(url,window.location.href));
+    const fileref=document.createElement('script');
+    fileref.setAttribute("type","text/javascript");
+    fileref.setAttribute("src", nUrl);
+    document.head.appendChild(fileref);
+}
+export const loadOrUpdateCss=(url,id)=>{
+    if (id){
+        let existing=document.head.querySelector('#'+id);
+        if (existing && existing.href){
+            let nUrl=injectDateIntoUrl(new URL(url?url:existing.href,window.location.href));
+            existing.href=nUrl;
+            return true;
+        }
+    }
+    if (! url) return false;
+    let fileref=document.createElement("link");
+    fileref.setAttribute("rel", "stylesheet");
+    fileref.setAttribute("type", "text/css");
+    let nUrl=injectDateIntoUrl(new URL(url,window.location.href));
+    fileref.setAttribute("href", nUrl);
+    if (id) fileref.setAttribute("id",id);
+    document.head.appendChild(fileref);
+    return true;
+}
 Helper.concat=concat;
 Helper.concatsp=concatsp;
 Helper.unsetorTrue=unsetOrTrue;
 Helper.now=now;
 Helper.iterate=iterate;
+Helper.getNameAndExt=getNameAndExt;
+Helper.reloadPage=reloadPage;
+Helper.isObject=isObject;
+Helper.injectav=injectav;
+Helper.avitem=avitem;
+Helper.setav=setav;
+Helper.isset=isset;
 
 export default Helper;
 

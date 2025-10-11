@@ -12,17 +12,16 @@ import React, {
     cloneElement,
     createContext,
     forwardRef,
-    useCallback,
     useContext,
     useRef,
     useState
 } from 'react';
-import assign from 'object-assign';
-import InputMonitor from '../hoc/InputMonitor.jsx';
+import {useInputMonitor} from '../hoc/InputMonitor.jsx';
 import DialogButton from './DialogButton.jsx';
 import MapEventGuard from "../hoc/MapEventGuard";
 import PropTypes from "prop-types";
 import Helper, {concatsp} from "../util/helper";
+import base from "../base";
 
 
 /**
@@ -39,19 +38,21 @@ const Container=MapEventGuard(React.forwardRef((props,ref)=>{
     )
 }));
 
-const OverlayDialog = ({className,closeCallback,replaceDialog,children}) => {
+export const OverlayDialog = ({className,closeCallback,replaceDialog,children}) => {
     let [DialogDisplay,setDialog]=useDialog(); //for nested dialogs
     const dialogContext=useDialogContext(); //if we are nested - just handle the z index
     let classNameS = "dialog";
     if (className) classNameS += " " + className;
     const close=closeCallback;
     const ourZIndex=dialogContext.zIndex+10;
+    useInputMonitor();
     return (
         <DialogContext
             closeDialog={close}
             showDialog={setDialog}
             zIndex={ourZIndex}
             replaceDialog={replaceDialog}
+            id={getCtxId()}
         >
         <Container onClick={close}>
             <div
@@ -166,19 +167,25 @@ export const DBOk=(onClick,props)=>{
 
 
 const DIALOG_Z=120;
+let dialogCtxId=0;
+const getCtxId=()=>{
+    dialogCtxId++;
+    return dialogCtxId;
+}
 
-const buildContext=(closeDialog,showDialog,replaceDialog,zIndex)=>{
+const buildContext=(closeDialog,showDialog,replaceDialog,zIndex,opt_id)=>{
     return {
         closeDialog: closeDialog?closeDialog:()=>{},
         showDialog: showDialog?showDialog:()=>{},
         zIndex: (zIndex!==undefined)?zIndex:DIALOG_Z,
-        replaceDialog: replaceDialog?replaceDialog:()=>{}
+        replaceDialog: replaceDialog?replaceDialog:()=>{},
+        id: (opt_id!==undefined)?opt_id:getCtxId()
     };
 }
 const DialogContextImpl=createContext(buildContext());
 export const useDialogContext=()=>useContext(DialogContextImpl);
-export const DialogContext=({closeDialog,showDialog,replaceDialog,zIndex,children})=>{
-    return <DialogContextImpl.Provider value={buildContext(closeDialog,showDialog,replaceDialog,zIndex)}>
+export const DialogContext=({closeDialog,showDialog,replaceDialog,zIndex,children,id})=>{
+    return <DialogContextImpl.Provider value={buildContext(closeDialog,showDialog,replaceDialog,zIndex,id)}>
         {children}
     </DialogContextImpl.Provider>
 }
@@ -197,14 +204,13 @@ export const setGlobalContext=(closeDialog,showDialog,zIndex)=>{
 export const useDialog=(closeCb)=>{
     const [dialogContent,setDialog]=useState(undefined);
     const dialogId=useRef(1);
-    const Display=InputMonitor(OverlayDialog);
-    const setNewDialog=useCallback((content,opt_closeCb)=>{
+    const setNewDialog=(content,opt_closeCb)=>{
         if (content){
-            dialogId.current++;
-            if (dialogContent && dialogContent.content){
+            if (dialogContent && dialogContent.content && dialogId.current === dialogContent.id){
                 if (dialogContent.close) dialogContent.close();
                 //we will not call the global close callback
             }
+            dialogId.current++;
             setDialog({content:content,close:opt_closeCb,id:dialogId.current});
         }
         else {
@@ -214,23 +220,23 @@ export const useDialog=(closeCb)=>{
             }
             setDialog(undefined)
         }
-    },[dialogContent]);
+    };
     return [
         () => {
             if (!dialogContent || !dialogContent.content) return null;
             return (
-                <Display
+                <OverlayDialog
                     closeCallback={() => {
                     //only close the dialog if there is not already a new dialog
                     if (dialogContent){
                         if(dialogId.current === dialogContent.id) {
                             setDialog(undefined);
                             if (closeCb) closeCb();
+                            if (dialogContent.close) dialogContent.close();
                         }
                         else{
-                            console.log("deferred close");
+                            base.log("deferred close");
                         }
-                        if (dialogContent.close) dialogContent.close();
                     }
                 }}
                     replaceDialog={(newDialog,opt_closeCb)=>{
@@ -238,7 +244,7 @@ export const useDialog=(closeCb)=>{
                     }}
                 >
                     <dialogContent.content/>
-                </Display>
+                </OverlayDialog>
 
             )
         }
@@ -275,7 +281,14 @@ export const showDialog=(opt_dialogContext,dialog,opt_cancelCallback)=>{
                 opt_dialogContext=undefined;
         }
     }
-    if (! opt_dialogContext) addGlobalDialog(dialog,opt_cancelCallback);
+    if (! opt_dialogContext) {
+        const cancel=()=>{
+            if (window.avnav.android && window.avnav.android.dialogClosed){
+                window.avnav.android.dialogClosed();
+            }
+        }
+        globalContext.showDialog(dialog,cancel);
+    }
     else opt_dialogContext.showDialog(dialog,opt_cancelCallback);
 }
 
@@ -291,108 +304,4 @@ export const promiseResolveHelper = ({ok, err}, resolveFunction, ...args) => {
     }
     if (rt) ok && ok();
     else err && err();
-}
-
-/* =================================================================================================
-   legacy dialog handling
-   =================================================================================================*/
-
-export const DialogDisplay=({closeCallback,children})=>{
-    let Display=InputMonitor(OverlayDialog);
-    return(
-        <Display
-            className="nested"
-            closeCallback={closeCallback}
-        >
-            {children}
-        </Display>
-    );
-}
-
-/**
- * a helper that will add dialog functionality to a component
- * it will maintain a variable inside the component state that holds the dialog
- * and it will wrap the render method to render the dialog if it is set
- * it exposes a couple of methods to control the dialog
- * normally you will instantiate it in the constructor like
- *    this.dialogHelper=dialogHelper(this);
- * and later you will use it like
- *    this.dialogHelper.showDialog((props)=>return <div>HelloDialog</div>);
- * @param thisref - the react component
- * @param stateName
- * @param opt_closeCallback - callback when dialog is closed
- * @returns {*}
- */
-export const dialogHelper=(thisref,stateName,opt_closeCallback)=>{
-    if (! stateName) stateName="dialog";
-    let rt={
-        showDialog:(Dialog)=>{
-            let state={};
-            state[stateName]=(props)=>{
-                return(
-                    <Dialog
-                        {...props}
-                        closeCallback={()=>{
-                            rt.hideDialog();
-                        }}
-                    />
-                )
-            };
-            thisref.setState(state);
-        },
-        hideDialog:()=>{
-            let state={};
-            state[stateName]=undefined;
-            thisref.setState(state);
-            notifyClosed();
-            if (opt_closeCallback) opt_closeCallback();
-        },
-        filterState:(state)=>{
-            let rt=assign({},state);
-            delete rt[stateName];
-            return rt;
-        },
-        getRender(){
-            if (!thisref.state[stateName]) return null;
-            const D=thisref.state[stateName];
-            return (
-                <DialogDisplay closeCallback={()=>{
-                    this.hideDialog()
-                }}>
-                    <D/>
-                </DialogDisplay> );
-        },
-        isShowing(){
-            return !!thisref.state[stateName];
-        }
-    };
-    rt.showDialog=rt.showDialog.bind(rt);
-    rt.hideDialog=rt.hideDialog.bind(rt);
-    rt.filterState=rt.filterState.bind(rt);
-    rt.getRender=rt.getRender.bind(rt);
-    let originalRender=thisref.render;
-    let newRender=()=>{
-        return <React.Fragment>
-            {rt.getRender()}
-            {originalRender.call(thisref)}
-        </React.Fragment>
-    };
-    thisref.render=newRender.bind(thisref);
-    return rt;
-};
-
-/**
- * handler for a global dialog
- */
-const addGlobalDialog=(dialog,opt_cancel,opt_timeout)=>{
-    const cancel=()=>{
-        notifyClosed();
-        if (opt_cancel) opt_cancel();
-    }
-    globalContext.showDialog(dialog,cancel,opt_timeout);
-}
-const notifyClosed=()=>{
-    if (window.avnav.android && window.avnav.android.dialogClosed){
-        window.avnav.android.dialogClosed();
-    }
 }

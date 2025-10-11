@@ -24,13 +24,12 @@
  * display the infos of a feature
  */
 
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import PropTypes from 'prop-types';
 import Formatter from '../util/formatter';
 import DB from './DialogButton';
-import OverlayDialog, {DialogButtons, DialogFrame, useDialogContext} from "./OverlayDialog";
+import {DBCancel, DialogButtons, DialogFrame, DialogRow, useDialogContext} from "./OverlayDialog";
 import NavHandler from "../nav/navdata";
-import navobjects from "../nav/navobjects";
 import globalstore from "../util/globalstore";
 import keys from "../util/keys";
 import NavCompute from "../nav/navcompute";
@@ -38,12 +37,36 @@ import {getTrackInfo,INFO_ROWS as TRACK_INFO_ROWS} from "./TrackConvertDialog";
 import {getRouteInfo,INFO_ROWS as ROUTE_INFO_ROWS} from "./RouteInfoHelper";
 import Toast from "./Toast";
 import {InfoItem} from "./BasicDialogs";
+import {AisFeatureInfo, AnchorFeatureInfo, BaseFeatureInfo, FeatureAction, FeatureInfo} from "../map/featureInfo";
+import Helper from "../util/helper";
+import {AisInfoWithFunctions} from "./AisInfoDisplay";
+import {WatchDialogWithFunctions} from "./AnchorWatchDialog";
+import MapEventGuard from "../hoc/MapEventGuard";
+import globalStore from "../util/globalstore";
+import MapHolder from "../map/mapholder";
 NavHandler.getRoutingHandler();
 
+const POS_ROW={label: 'position',value:'point',formatter:(v)=>Formatter.formatLonLats(v)}
 
 const INFO_ROWS=[
-    {label: 'position',value:'nextTarget',formatter:(v)=>Formatter.formatLonLats(v)},
-    {label: 'distance',value:'nextTarget',formatter:(v)=>{
+    {label:'item',formatter:(v,featureInfo)=>{
+            if (featureInfo.isOverlay || featureInfo.getType() === FeatureInfo.TYPE.chart) return;
+            return featureInfo.title;
+        }},
+    {label:'overlay',value:'title',formatter:(v,overlay)=>{
+            if (!overlay.isOverlay || overlay.getType() === FeatureInfo.TYPE.chart) return;
+            let prefix="";
+            if (overlay.getType()) prefix=TYPE_PREFIX[overlay.getType()]||"";
+            return prefix+v;
+        }},
+    {label:'chart',value:'title',formatter:(v,overlay)=>{
+            if (overlay.getType() !== FeatureInfo.TYPE.chart) return;
+            return v;
+        }
+    },
+    POS_ROW,
+    {label: 'distance',value:'point',formatter:(v,featureInfo)=>{
+            if (! featureInfo.validPoint()) return;
             let position=globalstore.getData(keys.nav.gps.position);
             let valid=globalstore.getData(keys.nav.gps.valid,false);
             if (! valid) return;
@@ -52,7 +75,8 @@ const INFO_ROWS=[
                 globalstore.getData(keys.nav.routeHandler.useRhumbLine));
             return Formatter.formatDistance(distance.dts)+" nm";
         }},
-    {label: 'bearing',value:'nextTarget',formatter:(v)=>{
+    {label: 'bearing',value:'point',formatter:(v,featureInfo)=>{
+            if (! featureInfo.validPoint()) return;
             let position=globalstore.getData(keys.nav.gps.position);
             let valid=globalstore.getData(keys.nav.gps.valid,false);
             if (! valid) return;
@@ -61,81 +85,184 @@ const INFO_ROWS=[
                 globalstore.getData(keys.nav.routeHandler.useRhumbLine));
             return Formatter.formatDirection(distance.course)+" °";
         }},
-    {label:'name',value:'name'},
-    {label:'description',value:'desc',formatter:(v,feature)=>{
-        if (feature.name === v) return;
-        return v;
+    {label:'name',formatter:(v,featureInfo)=>{
+        if (featureInfo.validPoint() && featureInfo.point.name) return featureInfo.point.name;
+        return featureInfo.userInfo.name;
         }},
-    {label:'time',value:'time',formatter:(v)=>{
+    {label:'description',formatter:(v,feature)=>{
+        const rt=feature.userInfo.desc;
+        if (feature.userInfo.name === rt) return;
+        return rt;
+        }},
+    {label:'time',formatter:(unused,featureInfo)=>{
         try{
+            const v=featureInfo.userInfo.time;
+            if (v === undefined) return;
             let tv=new Date(v);
             return Formatter.formatDateTime(tv);
         }catch(e){}
         }},
-    {label:'overlay',value:'overlayName',formatter:(v,overlay)=>{
-        if (overlay.overlayType === 'chart') return;
-        let prefix="";
-        if (overlay.overlayType) prefix=TYPE_PREFIX[overlay.overlayType]||"";
-        return prefix+v;
-        }},
-    {label:'chart',value:'overlayName',formatter:(v,overlay)=>{
-        if (overlay.overlayType !== 'chart') return;
-        return v;
-        }
-    },
-    {label:'symbol',value:'sym'},
+    {label:'symbol',formatter:(v,featureInfo)=>featureInfo.userInfo.sym},
     //for s57 objects
-    {label: 'buoy',value: 'buoy'},
-    {label: 'top',value:'top'},
-    {label: 'light', value:'light'}
+    {label: 'buoy',formatter:(v,featureInfo)=>featureInfo.userInfo.buoy},
+    {label: 'top',formatter:(v,featureInfo)=>featureInfo.userInfo.top},
+    {label: 'light', formatter:(v,featureInfo)=>featureInfo.userInfo.light}
 
 ];
 
 const TYPE_PREFIX={
-    route: "Route: ",
-    track: "Track: "
+    [FeatureInfo.TYPE.route]: "Route: ",
+    [FeatureInfo.TYPE.track]: "Track: "
 };
 
 const INFO_FUNCTIONS={
-    track: getTrackInfo,
-    route: getRouteInfo
+    [FeatureInfo.TYPE.track]: getTrackInfo,
+    [FeatureInfo.TYPE.route]: getRouteInfo
 };
 const INFO_DISPLAY={
-    track: TRACK_INFO_ROWS,
-    route: ROUTE_INFO_ROWS
+    [FeatureInfo.TYPE.track]: TRACK_INFO_ROWS,
+    [FeatureInfo.TYPE.route]: ROUTE_INFO_ROWS
 }
 
-const InfoRowDisplay=({row,data})=>{
-    let v=data[row.value];
-    if (v === undefined) return null;
+const InfoRowDisplay=({row,data,className})=>{
+    let v;
+    if (row.value) {
+        v = data[row.value];
+        if (v === undefined) return null;
+    }
     if (row.formatter) v=row.formatter(v,data);
     if (v === undefined) return null;
-    return <InfoItem label={row.label} value={v}/>
+    return <InfoItem label={row.label} value={v} className={className}/>
+}
+const ImageIcon=({iconImage,className})=>{
+    const ref=useRef();
+    useEffect(() => {
+        if (ref.current) ref.current.appendChild(iconImage.cloneNode(true));
+    }, []);
+    return <div className={Helper.concatsp(className,'ImageIcon')} ref={ref}/>
 }
 
-const FeatureInfoDialog = (props) => {
+const FeatureIcon=({feature,showOverlayIcon})=>{
+    return <React.Fragment>
+        {feature.icon && <ImageIcon className={'icon'} iconImage={feature.icon}/>}
+        {!feature.icon && <span className={Helper.concatsp('icon',feature.typeString())}/> }
+        { showOverlayIcon && feature.isOverlay && (feature.getType() !== FeatureInfo.TYPE.overlay) && <span className={Helper.concatsp('icon','overlay')}/> }
+    </React.Fragment>
+}
+
+export const FeatureListDialog = ({featureList, onSelectCb, additionalActions, history,listActions,className}) => {
+    const dialogContext = useDialogContext();
+    const shouldKeep=useRef(false);
+    const select = useCallback((featureInfo) => {
+        if (!onSelectCb || onSelectCb(featureInfo)) {
+            shouldKeep.current=false;
+            if (featureInfo instanceof AisFeatureInfo){
+                dialogContext.showDialog((dprops)=><AisInfoWithFunctions
+                        {...dprops}
+                        mmsi={featureInfo.urlOrKey}
+                        actionCb={(action,m)=>{
+                            if (action === 'AisInfoList'){
+                                history.push('aispage', {mmsi: m});
+                            }
+                            dialogContext.closeDialog();
+                        }}
+                    />
+                )
+                return;
+            }
+            if (featureInfo instanceof AnchorFeatureInfo){
+                dialogContext.replaceDialog((dprops)=><WatchDialogWithFunctions {...dprops}/>)
+                return;
+            }
+            let factions = [];
+            if (additionalActions instanceof Array) {
+                additionalActions.forEach((action)=>{
+                    if (action.shouldShow(featureInfo)){
+                        factions.push(action);
+                    }
+                })
+            }
+            dialogContext.showDialog((dprops) => <FeatureInfoDialog
+                    {...dprops}
+                    featureInfo={featureInfo}
+                    additionalActions={factions}
+                    history={history}
+                    cancelAction={()=>{
+                        shouldKeep.current=true;
+                        return true;
+                    }}
+                />,
+                ()=>{
+                    if (! shouldKeep.current){
+                        dialogContext.closeDialog();
+                    }
+                }
+            )
+        } else {
+            dialogContext.closeDialog();
+        }
+    }, [onSelectCb, additionalActions, history]);
+    if (!(featureList instanceof Array) || featureList.length < 1) {
+        dialogContext.closeDialog();
+        return null;
+    }
+    const buttonList=[];
+    const baseInfo=featureList[0];
+    if (baseInfo && listActions){
+        listActions.forEach((action)=>{
+            if (action.shouldShow(baseInfo)){
+                buttonList.push({
+                    name:action.name,
+                    onClick:() => {
+                        action.onClick(baseInfo,dialogContext)
+                    },
+                    label:action.label,
+                    close: Helper.unsetorTrue(action.close),
+                    toggle: action.toggle(baseInfo)
+                });
+            }
+        })
+    }
+    buttonList.push(DBCancel());
+    return <DialogFrame className={Helper.concatsp('featureListDialog',className)} title={'FeatureList'}>
+        {baseInfo &&
+            <InfoRowDisplay row={POS_ROW} data={baseInfo}/>
+        }
+        {featureList.map((feature) => {
+            if (feature instanceof BaseFeatureInfo) return null;
+            return <DialogRow key={feature.urlOrKey||feature.title} className={'listEntry'} onClick={() => {
+                select(feature);
+            }}>
+                <div className={'icons'}>
+               <FeatureIcon feature={feature} showOverlayIcon={true}/>
+                </div>
+                <span className={'title'}>{feature.title}</span>
+            </DialogRow>
+        })}
+        <DialogButtons buttonList={buttonList}/>
+    </DialogFrame>
+}
+FeatureListDialog.propTypes={
+    className: PropTypes.string,
+    history: PropTypes.object.isRequired,
+    featureList: PropTypes.arrayOf(PropTypes.instanceOf(FeatureInfo)),
+    onSelectCb: PropTypes.func, //return false to cancel
+    additionalActions: PropTypes.arrayOf(PropTypes.instanceOf(FeatureAction)),
+    listActions: PropTypes.arrayOf(PropTypes.instanceOf(FeatureAction)) //will be called with first list element (if this is a BaseFeatureInfo)
+}
+
+export const GuardedFeatureListDialog=MapEventGuard(FeatureListDialog);
+GuardedFeatureListDialog.propTypes=FeatureListDialog.propTypes;
+
+const FeatureInfoDialog = ({featureInfo,additionalActions,history,cancelAction}) => {
     const [extendedInfo, setExtendedInfo] = useState({});
     const dialogContext = useDialogContext();
-    const linkAction = useCallback(() => {
-        if (!props.link && !props.htmlInfo) return;
-        dialogContext.closeDialog();
-        let url = props.link;
-        if (props.htmlInfo) {
-            props.history.push('viewpage', {html: props.htmlInfo, name: props.name || 'featureInfo'});
-            return;
-        }
-        props.history.push('viewpage', {url: url, name: props.name, useIframe: true});
-    }, [props]);
-    const hideAction = useCallback(() => {
-        if (!props.overlaySource) return;
-        dialogContext.closeDialog();
-        props.overlaySource.setEnabled(false, true);
-    }, [props]);
     useEffect(() => {
-        let infoFunction = INFO_FUNCTIONS[props.overlayType]
-        let infoCoordinates = props.nextTarget;
+        if (! featureInfo) return;
+        let infoFunction = INFO_FUNCTIONS[featureInfo.getType()]
+        let infoCoordinates = featureInfo.point;
         if (infoFunction && infoCoordinates) {
-            infoFunction(props.overlayName,
+            infoFunction(featureInfo.urlOrKey,
                 infoCoordinates
             )
                 .then((info) => {
@@ -144,51 +271,52 @@ const FeatureInfoDialog = (props) => {
                 .catch((error) => Toast(error));
         }
     }, []);
-    let link = props.link || props.htmlInfo;
-    let extendedInfoRows = INFO_DISPLAY[props.overlayType];
-    let merged = {...props, ...extendedInfo};
+    if (! featureInfo){
+        dialogContext.closeDialog();
+        return null;
+    }
+    let extendedInfoRows = INFO_DISPLAY[featureInfo.getType()];
     return (
         <DialogFrame className="FeatureInfoDialog">
             <h3 className="dialogTitle">
-                {props.icon &&
-                    <span className="icon" style={{backgroundImage: "url('" + props.icon + "')"}}/>
-                }
+                <FeatureIcon feature={featureInfo}/>
                 Feature Info
             </h3>
             {INFO_ROWS.map((row) => {
-                return <InfoRowDisplay row={row} data={props}/>;
+                return <InfoRowDisplay row={row} data={featureInfo} key={row.label}/>;
             })}
             {extendedInfoRows && extendedInfoRows.map((row) => {
-                return <InfoRowDisplay row={row} data={extendedInfo}/>;
-            })}
-            {props.additionalInfoRows && props.additionalInfoRows.map((row) => {
-                return <InfoRowDisplay row={row} data={merged}/>;
+                return <InfoRowDisplay row={row} data={extendedInfo} key={row.label}/>;
             })}
             <DialogButtons>
-                {props.additionalActions && props.additionalActions.map((action) => {
-                    if (typeof (action.condition) === "function") {
-                        if (!action.condition(merged)) return null;
-                    }
-                    if (action.condition !== undefined && !action.condition) return null;
+                {additionalActions && additionalActions.map((action) => {
+                    if (!action.shouldShow(featureInfo)) return null;
                     return <DB
+                        key={action.name}
                         name={action.name}
                         onClick={() => {
-                            action.onClick(merged)
-                        }}>
+                            action.onClick(featureInfo,dialogContext)
+                        }}
+                        close={Helper.unsetorTrue(action.close)}
+                        toggle={action.toggle(featureInfo)}
+                        onPreClose={(featureInfo)=>{
+                            if (! action.onPreClose(featureInfo,dialogContext)){
+                                if (cancelAction) cancelAction(featureInfo,dialogContext);
+                            }
+                            return true;
+                        }}
+                        >
                         {action.label}
                     </DB>
                 })}
-                {link && <DB
-                    name="info"
-                    onClick={linkAction}
-                    close={false}
-                >Info</DB>}
-                {props.overlaySource &&
-                    <DB name="hide"
-                        onClick={hideAction}
-                        close={false}
-                    >Hide</DB>}
                 <DB name={"cancel"}
+                    onPreClose={()=>{
+                        if (cancelAction) {
+                            return cancelAction(featureInfo,dialogContext);
+                        }
+                        return true;
+                    }}
+                    close={false}
                 >Cancel</DB>
             </DialogButtons>
         </DialogFrame>
@@ -196,15 +324,55 @@ const FeatureInfoDialog = (props) => {
 }
 
 FeatureInfoDialog.propTypes={
+    featureInfo: PropTypes.instanceOf(FeatureInfo),
     history: PropTypes.object.isRequired,
-    info: PropTypes.string,
-    link: PropTypes.string,
-    nextTarget:  PropTypes.array,
-    overlayName: PropTypes.string,
-    overlayType: PropTypes.string,
-    overlayUrl: PropTypes.string,
-    additionalActions: PropTypes.array, //array of objects with: name,label,onClick,condition
-    additionalInfoRows: PropTypes.array //array of name,value,formatter
+    additionalActions: PropTypes.array,
+    cancelAction: PropTypes.func
 }
 
-export default FeatureInfoDialog;
+export const hideAction=new FeatureAction({
+    name:"hide",
+    label: 'Hide',
+    onClick:(featureInfo)=>{
+        featureInfo.overlaySource.setEnabled(false, true);
+        },
+    condition: (featureInfo)=>featureInfo.isOverlay && featureInfo.overlaySource
+    });
+
+export const linkAction=(history)=>new FeatureAction({
+    name:"info",
+    label:'Info',
+    condition: (featureInfo)=>featureInfo.userInfo && (featureInfo.userInfo.link || featureInfo.userInfo.htmlInfo),
+    onClick: (featureInfo)=>{
+        const userInfo=featureInfo.userInfo||{};
+        if (!userInfo.link && !userInfo.htmlInfo) return;
+        let url = userInfo.link;
+        if (userInfo.htmlInfo) {
+            history.push('viewpage', {html: userInfo.htmlInfo, name: userInfo.title || 'featureInfo'});
+            return;
+        }
+        history.push('viewpage', {url: url, name: userInfo.title, useIframe: true});
+    }
+})
+
+export const CenterActionButton={
+    name: 'CenterAction',
+    storeKeys: {
+        toggle: keys.map.activeMeasure,
+        locked: keys.map.lockPosition,
+        always: keys.properties.mapAlwaysCenter
+    },
+    updateFunction: (state)=>{
+        return {
+            toggle:!!state.toggle,
+            visible: !state.locked || state.always
+        }
+    },
+    overflow: true,
+    editDisable: true,
+    onClick: ()=>{
+        let center = globalStore.getData(keys.map.centerPosition);
+        let pixel=MapHolder.coordToPixel(MapHolder.pointToMap([center.lon,center.lat]))
+        MapHolder.featureAction(pixel,true);
+    }
+}

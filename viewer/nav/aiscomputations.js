@@ -171,8 +171,7 @@ const aisSort=(a,b)=>{
 }
 
 export const AisOptionMappings={
-    minAISspeed: {key:keys.properties.minAISspeed,f:parseFloat},
-    minDisplaySpeed: {key: keys.properties.aisMinDisplaySpeed,f: parseFloat},
+    minAISspeed: {key:keys.properties.aisMinDisplaySpeed,f:parseFloat},
     useRhumbLine: keys.nav.routeHandler.useRhumbLine,
     onlyShowMoving: keys.properties.aisOnlyShowMoving,
     showA: keys.properties.aisShowA,
@@ -211,44 +210,57 @@ export const AisOptionMappings={
  *        dms - distance src to cpa point
  *        dmd - distance dest to cpa point
  */
-const computeApproach=(courseToTarget,curdistance,srcCourse,srcSpeed,dstCourse,dstSpeed,minAisSpeed,maxDistance)=>{
+const computeApproach = (courseToTarget, curdistance, srcCourse, srcSpeed, dstCourse, dstSpeed, minAisSpeed, maxDistance) => {
     //courses
-    let rt={};
-    let ca=(courseToTarget-srcCourse)/180*Math.PI; //rad
-    let cb=(courseToTarget-dstCourse)/180*Math.PI;
-    let cosa=Math.cos(ca);
-    let sina=Math.sin(ca);
-    let cosb=Math.cos(cb);
-    let sinb=Math.sin(cb);
-    if (dstSpeed > minAisSpeed && srcSpeed > minAisSpeed ){
-        //compute crossing
-        try {
-            rt.td = curdistance / (dstSpeed * (cosa / sina * sinb - cosb));
-            rt.ts=curdistance/(srcSpeed*(cosa-sina*cosb/sinb));
-        }catch(e){
-            //TODO: exception handling
-        }
-        if (rt.td !== undefined && rt.ts !== undefined){
-            rt.ds=srcSpeed*rt.ts; //in m
-            rt.dd=dstSpeed*rt.td; //in m
-            if (maxDistance !== undefined){
-                if (Math.abs(rt.ds) > maxDistance || Math.abs(rt.dd) > maxDistance){
-                    rt.td=undefined;
-                    rt.ts=undefined;
-                    rt.ds=undefined;
-                    rt.dd=undefined;
-                }
+    let rt = {};
+    if (dstSpeed <= minAisSpeed && srcSpeed <= minAisSpeed) {
+        //we consider both as steady
+        return rt;
+    }
+    let ca = (courseToTarget - srcCourse) / 180 * Math.PI; //rad
+    let cb = (courseToTarget - dstCourse) / 180 * Math.PI;
+    let cosa = Math.cos(ca);
+    let sina = Math.sin(ca);
+    let cosb = Math.cos(cb);
+    let sinb = Math.sin(cb);
+    if (dstSpeed <= minAisSpeed) {
+        rt.tm = curdistance * cosa / srcSpeed;
+        rt.dms = srcSpeed * rt.tm;
+        rt.dmd = 0;
+        return rt;
+    }
+    if (srcSpeed <= minAisSpeed) {
+        rt.tm = -curdistance * cosb / dstSpeed;
+        rt.dmd = dstSpeed * rt.tm;
+        rt.dms = 0;
+    }
+    //compute crossing
+    try {
+        rt.td = curdistance / (dstSpeed * (cosa / sina * sinb - cosb));
+        rt.ts = curdistance / (srcSpeed * (cosa - sina * cosb / sinb));
+    } catch (e) {
+        //TODO: exception handling
+    }
+    if (rt.td !== undefined && rt.ts !== undefined) {
+        rt.ds = srcSpeed * rt.ts; //in m
+        rt.dd = dstSpeed * rt.td; //in m
+        if (maxDistance !== undefined) {
+            if (Math.abs(rt.ds) > maxDistance || Math.abs(rt.dd) > maxDistance) {
+                rt.td = undefined;
+                rt.ts = undefined;
+                rt.ds = undefined;
+                rt.dd = undefined;
             }
         }
     }
-    let quot=(srcSpeed*srcSpeed+dstSpeed*dstSpeed-2*srcSpeed*dstSpeed*(cosa*cosb+sina*sinb));
-    if (quot < 1e-6 && quot > -1e-6){
-        rt.tm=undefined;
+    let quot = (srcSpeed * srcSpeed + dstSpeed * dstSpeed - 2 * srcSpeed * dstSpeed * (cosa * cosb + sina * sinb));
+    if (quot < 1e-6 && quot > -1e-6) {
+        rt.tm = undefined;
         return rt;
     }
-    rt.tm=curdistance*(cosa*srcSpeed-cosb*dstSpeed)/quot;
-    rt.dms=srcSpeed*rt.tm;
-    rt.dmd=dstSpeed*rt.tm;
+    rt.tm = curdistance * (cosa * srcSpeed - cosb * dstSpeed) / quot;
+    rt.dms = srcSpeed * rt.tm;
+    rt.dmd = dstSpeed * rt.tm;
     return rt;
 };
 
@@ -267,58 +279,70 @@ const computeApproach=(courseToTarget,curdistance,srcCourse,srcSpeed,dstCourse,d
  * @param options {object} - useRhumbLine, minAISSpeed
  * @returns {Cpa}
  */
-const computeCpa=(src,dst,options)=>{
+const computeCpa = (src, dst, options) => {
     let rt = new Cpa();
-    let llsrc = new LatLon(src.lat, src.lon);
-    let lldst = new LatLon(dst.lat, dst.lon);
-    let curdistance=options.useRhumbLine?llsrc.rhumbDistanceTo(lldst):llsrc.distanceTo(lldst); //m
-    rt.curdistance=curdistance;
-    let courseToTarget=options.useRhumbLine?
-        llsrc.rhumbBearingTo(lldst):
-        llsrc.initialBearingTo(lldst); //in deg
-    //default to our current distance
-    rt.tcpa=0;
-    rt.cpa=curdistance;
-    let maxDistance=6371e3*1000*Math.PI; //half earth
-    let appr=computeApproach(courseToTarget,curdistance,src.course,src.speed,dst.course,dst.speed,options.minAISspeed,maxDistance);
-    if (appr.dd !== undefined && appr.ds !== undefined) {
-        let xpoint = options.useRhumbLine?
-            llsrc.rhumbDestinationPoint(appr.dd,src.course):
-            llsrc.destinationPoint(appr.dd,src.course);
-        rt.crosspoint = new navobjects.Point(xpoint.lon, xpoint.lat);
-    }
-    if (!appr.tm){
-        rt.tcpa=undefined;
-        rt.cpa=curdistance;
-        rt.passFront=undefined;
-        return rt;
-    }
+    let llsrc;
+    let lldst;
+    try {
+        llsrc = new LatLon(src.lat, src.lon);
+        lldst = new LatLon(dst.lat, dst.lon);
+        let curdistance = options.useRhumbLine ? llsrc.rhumbDistanceTo(lldst) : llsrc.distanceTo(lldst); //m
+        rt.curdistance = curdistance;
+        let courseToTarget = options.useRhumbLine ?
+            llsrc.rhumbBearingTo(lldst) :
+            llsrc.initialBearingTo(lldst); //in deg
+        //default to our current distance
+        rt.tcpa = 0;
+        rt.cpa = curdistance;
+        let maxDistance = 6371e3 * 1000 * Math.PI; //half earth
+        let appr;
+        const srcCourse = correctedCourse(src.course, src.speed, options.minAISspeed);
+        const targetCourse = correctedCourse(dst.course, dst.speed, options.minAISspeed);
+        if (srcCourse !== undefined && src.speed !== undefined && targetCourse !== undefined && dst.speed !== undefined) {
+            appr = computeApproach(courseToTarget, curdistance, srcCourse, src.speed, targetCourse, dst.speed, options.minAISspeed, maxDistance);
+        }
+        if (appr && appr.dd !== undefined && appr.ds !== undefined) {
+            let xpoint = options.useRhumbLine ?
+                llsrc.rhumbDestinationPoint(appr.dd, srcCourse) :
+                llsrc.destinationPoint(appr.dd, srcCourse);
+            rt.crosspoint = new navobjects.Point(xpoint.lon, xpoint.lat);
+        }
+        if (!appr || !appr.tm) {
+            rt.tcpa = undefined;
+            rt.cpa = curdistance;
+            rt.passFront = undefined;
+            return rt;
+        }
 
-    let cpasrc = options.useRhumbLine?
-        llsrc.rhumbDestinationPoint(appr.dms,src.course):
-        llsrc.destinationPoint(appr.dms,src.course );
-    let cpadst = options.useRhumbLine?
-        lldst.rhumbDestinationPoint(appr.dms,dst.course):
-        lldst.destinationPoint(appr.dmd,dst.course);
-    rt.src.lon=cpasrc.lon;
-    rt.src.lat=cpasrc.lat;
-    rt.dst.lon=cpadst.lon;
-    rt.dst.lat=cpadst.lat;
-    rt.tcpa = appr.tm;
-    rt.cpa = options.useRhumbLine?
-        cpasrc.rhumbDistanceTo(cpadst):
-        cpasrc.distanceTo(cpadst);
-    rt.bcpa = options.useRhumbLine?
-        cpasrc.rhumbBearingTo(cpadst):
-        cpasrc.initialBearingTo(cpadst);
-    rt.passFront=Cpa.PASS_BACK;
-    if (appr.td !==undefined && appr.ts!==undefined){
-        if(appr.ts>=0 && appr.ts<appr.td) rt.passFront=Cpa.PASS_FRONT; // we will cross track of target in front of target
-        else if(appr.ts>=0 && appr.ts>appr.td) rt.passFront=Cpa.PASS_PASS; // we will cross track of target astern of target
-        else rt.passFront=Cpa.PASS_BACK; // we have crossed the track of the target already
+        let cpasrc = (appr.dms === 0) ? llsrc : options.useRhumbLine ?
+            llsrc.rhumbDestinationPoint(appr.dms, srcCourse) :
+            llsrc.destinationPoint(appr.dms, srcCourse);
+        let cpadst = (appr.dmd === 0) ? lldst : options.useRhumbLine ?
+            lldst.rhumbDestinationPoint(appr.dmd, targetCourse) :
+            lldst.destinationPoint(appr.dmd, targetCourse);
+        rt.src.lon = cpasrc.lon;
+        rt.src.lat = cpasrc.lat;
+        rt.dst.lon = cpadst.lon;
+        rt.dst.lat = cpadst.lat;
+        rt.tcpa = appr.tm;
+        rt.cpa = options.useRhumbLine ?
+            cpasrc.rhumbDistanceTo(cpadst) :
+            cpasrc.distanceTo(cpadst);
+        rt.bcpa = options.useRhumbLine ?
+            cpasrc.rhumbBearingTo(cpadst) :
+            cpasrc.initialBearingTo(cpadst);
+        rt.passFront = Cpa.PASS_BACK;
+        if (appr.td !== undefined && appr.ts !== undefined) {
+            if (appr.ts >= 0 && appr.ts < appr.td) rt.passFront = Cpa.PASS_FRONT; // we will cross track of target in front of target
+            else if (appr.ts >= 0 && appr.ts > appr.td) rt.passFront = Cpa.PASS_PASS; // we will cross track of target astern of target
+            else rt.passFront = Cpa.PASS_BACK; // we have crossed the track of the target already
+        }
+        if (rt.passFront === Cpa.PASS_BACK && appr.tm < 0) rt.passFront = Cpa.PASS_DONE; // we have crossed the track and have passed CPA
+        return rt;
+    } catch (e) {
+        //debug only for breakpoints here
+        throw e;
     }
-    if (rt.passFront===Cpa.PASS_BACK && appr.tm<0) rt.passFront=Cpa.PASS_DONE; // we have crossed the track and have passed CPA
-    return rt;
 }
 const pow2=(x)=>{
     return x*x;
@@ -333,9 +357,9 @@ const pow2=(x)=>{
  */
 const computeCourseVectors=(aisItem,boatPos,boatCog, boatSog, options)=>{
     if (! options.useCourseVector) return;
-    let target_cog=aisItem.received.course||0;
     let target_sog=aisItem.received.speed||0;
     if (target_sog <=0) return;
+    let target_cog=correctedCourse(aisItem.received.course,target_sog,options.minAISspeed);
     let target_rot=Math.abs(aisItem.received.turn||0); // °/min
     const curved = options.curved && isFinite(target_rot) && target_rot>0.5;
     let cvstart=aisItem.fromEstimated?aisItem.estimated:aisItem.receivedPos
@@ -362,7 +386,10 @@ const computeCourseVectors=(aisItem,boatPos,boatCog, boatSog, options)=>{
         aisItem.courseVector.startAngle=target_cog-target_rot_sgn*90;
         aisItem.courseVector.arc=target_rot_sgn*turn_angle;
     }
-    if (options.rmvRange > 0 && aisItem.distance !== undefined && boatSog !== undefined && aisItem.distance < options.rmvRange && (target_sog||boatSog)){
+    if (options.rmvRange > 0 && aisItem.distance !== undefined && boatSog !== undefined
+        && aisItem.distance < options.rmvRange &&
+        target_sog > options.minAISspeed &&
+        boatSog > options.minAISspeed){
         if (! curved){
             aisItem.rmv=new CourseVector();
             aisItem.rmv.start=cvstart;
@@ -375,6 +402,21 @@ const computeCourseVectors=(aisItem,boatPos,boatCog, boatSog, options)=>{
             aisItem.rmv.offsetDst=-boatSog*options.courseVectorTime;
         }
     }
+}
+/**
+ * it seems that some GPS report an undefined course for very low speeds
+ * so we allow an undefined course for speeds below minAISSpeed as this course does not matter any way
+ * we just set it to 0 in this case
+ * see https://github.com/wellenvogel/avnav/issues/498
+ * @param course
+ * @param speed
+ * @param minSpeed
+ * @returns {number|*}
+ */
+const correctedCourse=(course,speed,minSpeed)=>{
+    if (course !== undefined) return course;
+    if (speed <= minSpeed) return 0;
+    return course;
 }
 /**
  *
@@ -416,12 +458,12 @@ export const computeAis=(aisData,boatPos,boatCog,boatSpeed, options)=>{
         if (aisItem.age > options.lostTime) aisItem.lost=true;
         aisItem.receivedPos = new navobjects.Point(parseFloat(ais.lon || 0), parseFloat(ais.lat || 0));
         let aisCourse = parseFloat(ais.course || 0);
-        if (aisSpeed >= options.minDisplaySpeed) {
+        if (aisSpeed >= options.minAISspeed) {
             aisItem.estimated = NavCompute.computeTarget(aisItem.receivedPos, aisCourse, aisItem.age * aisSpeed, options.useRhumbLine);
         }
         aisItem.fromEstimated=(options.cpaEstimated && aisItem.estimated);
         let targetPos=(aisItem.fromEstimated)?aisItem.estimated:aisItem.receivedPos;
-        if (boatPos.lat !== undefined && boatPos.lon !== undefined && boatCog !== undefined && boatSpeed !== undefined) {
+        if (boatPos.lat !== undefined && boatPos.lon !== undefined && targetPos.lat !== undefined && targetPos.lon !== undefined) {
             let dst = NavCompute.computeDistance(boatPos, targetPos, options.useRhumbLine);
             aisItem.distance = dst.dts;
             aisItem.headingTo = dst.course;
@@ -467,13 +509,13 @@ export const computeAis=(aisData,boatPos,boatCog,boatSpeed, options)=>{
                 else aisItem.priority= pow2(aisItem.cpadata.tcpa/options.warningTime)+pow2(aisItem.cpadata.cpa/options.warningDist);
             }
         }
-        computeCourseVectors(aisItem,boatPos,boatCog,boatSpeed,options);
+        computeCourseVectors(aisItem, boatPos, boatCog, boatSpeed, options);
     })
     if (aisWarningAis !== undefined){
         aisWarningAis.nextWarning=true;
     }
     aisData.sort(aisSort);
-    if (aisData.length) aisData[0].nearest=true;
+    if (aisData.length && aisData[0].distance !== undefined) aisData[0].nearest=true;
 }
 /**
  *

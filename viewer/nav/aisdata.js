@@ -8,6 +8,7 @@ import keys from '../util/keys.jsx';
 import {aisproxy} from './aisformatter';
 import {AisOptionMappings} from "./aiscomputations";
 import Helper from "../util/helper";
+import base from "../base";
 
 
 export const fillOptions=()=>{
@@ -32,6 +33,34 @@ export const fillOptions=()=>{
 }
 
 const RECOMPUTE_TRIGGER=2000; //trigger AIS recomputation every xxx ms even if no boat data change
+
+class WorkerErrorHistory{
+    constructor() {
+        this.history=[];
+        this.max=20;
+        this.maxAge=30000;
+    }
+    add(entry){
+        let txt=entry;
+        let details;
+        if (entry instanceof Object){
+            txt=entry.message||entry+"";
+            details=entry.details||entry.stack;
+        }
+        this.history.push({ts:Helper.now(),entry:txt,details: details})
+        if (this.history.length > this.max) this.history.shift();
+    }
+    getEntries(now=Helper.now()){
+        const rt=[];
+        for (let i=this.history.length-1;i>=0;i--){
+            if (this.history[i].ts >= (now - this.maxAge)) rt.push(this.history[i]);
+        }
+        return rt;
+    }
+    clear(){
+        this.history=[];
+    }
+}
 
 /**
  * the handler for the ais data
@@ -62,6 +91,7 @@ class AisData {
         this.trackedAIStarget = undefined;
 
         this.lastBoatData=0;
+        this.lastReceived=0;
 
         globalStore.register(this, [
             keys.gui.global.propertySequence,
@@ -96,6 +126,7 @@ class AisData {
         this.workerSequence = 0;
         this.worker = new Worker(new URL("./aisworker.js", import.meta.url));
         this.worker.onmessage = ({data}) => {
+            this.lastReceived=Helper.now();
             //console.log("Aisdata: ", data);
             if (data.type === 'data') {
                 let storeKeys = {
@@ -103,8 +134,8 @@ class AisData {
                     currentAis: keys.nav.ais.list,
                     updateCount: keys.nav.ais.updateCount
                 };
-                let nearestAisTarget;
-                if (data.data && data.data.length) {
+                let nearestAisTarget=data.aisWarning?aisproxy(data.aisWarning):undefined;
+                if (data.data && data.data.length && !nearestAisTarget) {
                     if (this.trackedAIStarget !== undefined) {
                         for (let i = 0; i < data.data.length; i++) {
                             if (data.data[i].received && data.data[i].received.mmsi == this.trackedAIStarget) {
@@ -113,7 +144,7 @@ class AisData {
                             }
                         }
                     }
-                    if (nearestAisTarget === undefined) {
+                    if (nearestAisTarget === undefined && data.data[0].nearest) {
                         nearestAisTarget = aisproxy(data.data[0]);
                     }
                 }
@@ -124,8 +155,18 @@ class AisData {
                 }, storeKeys);
             }
             if (data.type === 'error') {
-                //TODO
+                this.workerErrors.add(data.error);
             }
+        };
+        this.workerErrors=new WorkerErrorHistory();
+        this.worker.onerror=(error)=>{
+            base.log("aisworker error:",error);
+            let finfo=error.filename.replace(/.*\//,'')+':'+error.lineno;
+            this.workerErrors.add(
+                {message: error.message,
+                 details:finfo
+                }
+            );
         };
         this.postWorker({
             type: 'config',
@@ -141,14 +182,20 @@ class AisData {
          * @type {number}
          */
         this.timer=window.setInterval(()=>{
-            if ((this.lastBoatData+RECOMPUTE_TRIGGER) < Helper.now()){
+            const now=Helper.now();
+            if ((this.lastBoatData+RECOMPUTE_TRIGGER) < now){
                 this.sendBoatData();
+            }
+            if ((this.lastReceived +3 * RECOMPUTE_TRIGGER) < now){
+                this.workerErrors.add({
+                    message: "no response from AIS worker",
+                    details: (this.lastReceived===0)?"no response at all":"no response for "+(now-this.lastReceived)+" ms"
+                });
             }
         },RECOMPUTE_TRIGGER*1.1);
     }
 
     sendBoatData(){
-        if (! this.worker) return;
         this.lastBoatData=Helper.now();
         this.postWorker({
             type:'boat',
@@ -180,7 +227,7 @@ class AisData {
     /**
      *
      */
-    startQuery() {
+    _startQueryInt() {
         let center = this.navdata.getAisCenter();
         let timeout = parseInt(globalStore.getData(keys.properties.aisQueryTimeout));
         if (!center) {
@@ -191,7 +238,7 @@ class AisData {
         if (!center) {
             window.clearTimeout(this.timer);
             this.timer = window.setTimeout(() => {
-                this.startQuery();
+                this._startQueryInt();
             }, timeout);
             return;
         }
@@ -202,9 +249,13 @@ class AisData {
             timeout: timeout
         })
         this.timer = window.setTimeout(() => {
-            this.startQuery();
+            this._startQueryInt();
         }, timeout);
 
+    }
+    startQuery(){
+        this.dataChanged();
+        this._startQueryInt();
     }
 
     /**
@@ -272,6 +323,9 @@ class AisData {
         this.postWorker({
             type: 'config'
         })
+    }
+    getErrors(){
+        return this.workerErrors.getEntries();
     }
 }
 

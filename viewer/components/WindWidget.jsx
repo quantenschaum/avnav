@@ -6,7 +6,6 @@ import React from "react";
 import PropTypes from 'prop-types';
 import Formatter from '../util/formatter';
 import keys from '../util/keys.jsx';
-import navcompute from '../nav/navcompute.js';
 import {WidgetFrame, WidgetHead, WidgetProps} from "./WidgetBase";
 
 export const getWindData=(props)=>{
@@ -46,6 +45,21 @@ export const getWindData=(props)=>{
         windSpeed: windSpeed,
         suffix: suffix
     }
+}
+
+export const WindStoreKeys={
+    windAngle: keys.nav.gps.windAngle,
+    windSpeed: keys.nav.gps.windSpeed,
+    windAngleTrue: keys.nav.gps.trueWindAngle,
+    windSpeedTrue: keys.nav.gps.trueWindSpeed,
+    windDirectionTrue: keys.nav.gps.trueWindDirection
+}
+export const WindProps={
+    windAngle:  PropTypes.number,
+    windSpeed:  PropTypes.number,
+    windAngleTrue:  PropTypes.number,
+    windSpeedTrue:  PropTypes.number,
+    kind: PropTypes.string //true,apparent,auto,
 }
 
 const WindWidget = (props) => {
@@ -96,31 +110,24 @@ const WindWidget = (props) => {
 
 WindWidget.propTypes={
     ...WidgetProps,
-    windAngle:  PropTypes.number,
-    windSpeed:  PropTypes.number,
-    windAngleTrue:  PropTypes.number,
-    windSpeedTrue:  PropTypes.number,
-    enabled:    PropTypes.bool,
-    kind: PropTypes.string,
-    showKnots: PropTypes.bool,
+    ...WindProps,
     show360: PropTypes.bool,
-    mode: PropTypes.string
 };
 
-WindWidget.storeKeys={
-    windAngle: keys.nav.gps.windAngle,
-    windSpeed: keys.nav.gps.windSpeed,
-    windAngleTrue: keys.nav.gps.trueWindAngle,
-    windSpeedTrue: keys.nav.gps.trueWindSpeed,
-    windDirectionTrue: keys.nav.gps.trueWindDirection,
-    visible: keys.properties.showWind,
-    showKnots: keys.properties.windKnots
-};
-WindWidget.formatter='formatSpeed';
-WindWidget.editableParameters={
-    formatterParameters: true,
-    show360: {type:'BOOLEAN',default:false},
-    kind: {type:'SELECT',list:['auto','trueAngle','trueDirection','apparent'],default:'auto'}
+WindWidget.predefined= {
+    storeKeys: WindStoreKeys,
+    editableParameters: {
+        show360: {type: 'BOOLEAN', default: false},
+        kind: {
+            type: 'SELECT',
+            list: ['auto', 'trueAngle', 'trueDirection', 'apparent'],
+            default: 'auto',
+            description: 'which wind data to be shown\nauto will try apparent, trueAngle, trueDirection and display the first found data'
+        },
+        formatter: true,
+        formatterParameters: true
+    },
+    formatter :'formatSpeed'
 };
 
 export default WindWidget;

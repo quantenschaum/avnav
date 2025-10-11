@@ -1,4 +1,4 @@
-import React, {Children, cloneElement, useCallback, useEffect, useRef, useState} from 'react';
+import React, {Children, cloneElement, forwardRef, useCallback, useEffect, useRef, useState} from 'react';
 import PropTypes from 'prop-types';
 import Headline from './Headline.jsx';
 import ButtonList from './ButtonList.jsx';
@@ -23,13 +23,16 @@ const alarmClick =function(){
     }
 };
 
-export const PageFrame=(iprops)=>{
+export const PageFrame=forwardRef((iprops,ref)=>{
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const {autoHideButtons,hideCallback,children,className,isEditing,id,buttonList,small,...forward}=useStore(iprops,{
+    const {autoHideButtons,hideCallback,children,className,isEditing,id,buttonList,small,editingChanged,windowDimensions,...forward}=useStore(iprops,{
         storeKeys:{
             isEditing: keys.gui.global.layoutEditing
         }
     });
+    useEffect(() => {
+        if (editingChanged) editingChanged(isEditing);
+    }, [isEditing]);
     useEffect(() => {
         KeyHandler.setPage(id);
         return ()=>hideToast();
@@ -65,6 +68,7 @@ export const PageFrame=(iprops)=>{
         isEditing?"editing":undefined
         )
     return <div
+                ref={ref}
                 className={cl}
                 id={id}
                 {...forward}
@@ -80,12 +84,13 @@ export const PageFrame=(iprops)=>{
             }
         )}
     </div>
-}
+})
 
 PageFrame.propTypes={
     className: PropTypes.string,
-    autoHideButtons: PropTypes.oneOfType([PropTypes.undefined,PropTypes.number]),
+    autoHideButtons: PropTypes.number,
     hideCallback: PropTypes.func,
+    editingChanged: PropTypes.func,
     id: PropTypes.string.isRequired
 }
 
@@ -108,13 +113,14 @@ PageLeft.propTypes = {
     ])
 }
 
-const Page=(props)=>{
+const Page=forwardRef((props,ref)=>{
         return <PageFrame
             className={props.className}
             id={props.id}
             style={props.style}
             autoHideButtons={props.autoHideButtons}
             hideCallback={props.buttonWidthChanged}
+            ref={ref}
             >
             {props.floatContent && props.floatContent}
             <PageLeft title={props.title}>
@@ -126,7 +132,7 @@ const Page=(props)=>{
                 widthChanged={props.buttonWidthChanged}
             />
         </PageFrame>
-}
+});
 
 Page.pageProperties={
     className: PropTypes.string,

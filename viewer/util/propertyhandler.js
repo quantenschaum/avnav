@@ -49,7 +49,7 @@ class PropertyHandler {
         this.prefixKeys=[];
         for (let k in this.propertyDescriptions){
             let description=this.propertyDescriptions[k];
-            if (description instanceof SplitProperty){
+            if (description.isSplit()){
                 this.prefixKeys.push(k);
             }
         }
@@ -381,6 +381,12 @@ class PropertyHandler {
                                         }
                                     })
                         );
+                        break;
+                    case PropertyType.DELETED:
+                        warnings.push(dk+" is not used any more");
+                        break;
+                    case PropertyType.STRING:
+                        rt[dk]=v;
                         break;
                     default:
                         if (eHandler(dk+": cannot be set",true)) return;

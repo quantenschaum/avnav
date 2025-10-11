@@ -6,10 +6,7 @@ import React from "react";
 import PropTypes from 'prop-types';
 import Formatter from '../util/formatter';
 import keys from '../util/keys.jsx';
-import navcompute from '../nav/navcompute.js';
-import {useKeyEventHandler} from '../util/GuiHelpers.js';
-import {getWindData} from "./WindWidget";
-import {useAvNavSortable} from "../hoc/Sortable";
+import {getWindData, WindProps, WindStoreKeys} from "./WindWidget";
 import {WidgetFrame, WidgetProps} from "./WidgetBase";
 import globalstore from "../util/globalstore";
 
@@ -30,7 +27,6 @@ const nightColors={
     text: 'rgba(252, 11, 11, 0.6)'
 };
 const WindGraphics = (props) => {
-    useKeyEventHandler(props, "widget");
     let canvas = undefined;
     const drawWind = () => {
         let current = getWindData(props);
@@ -48,7 +44,7 @@ const WindGraphics = (props) => {
         let f1 = w / width;
         let f2 = h / height;
         let f = Math.min(f1, f2);
-        let fontSize = f * height / 5;
+        let fontSize = f * height / 6;
         let mvx = (w - width * f) / 2;
         let mvy = (h - height * f) / 2;
         ctx.translate(mvx > 0 ? 0.9 * mvx : 0, mvy > 0 ? mvy : 0); //move the drawing to the middle
@@ -121,7 +117,7 @@ const WindGraphics = (props) => {
         ctx.font = fontSize + "px "+globalstore.getData(keys.properties.fontBase);
         let a180 = !(props.show360 || current.suffix.endsWith('D'));
         let txt = Formatter.formatDirection(winddirection,false,a180);
-        let xFactor = -0.8;
+        let xFactor = -1.0;
         if (winddirection < 0) xFactor = -1.0;
         ctx.fillStyle = colors.text;
         ctx.fillText(txt, xFactor * fontSize, 0.4 * fontSize);
@@ -132,8 +128,8 @@ const WindGraphics = (props) => {
         ctx.lineWidth = pointer_linewidth;
         ctx.lineCap = 'round';
         ctx.strokeStyle = colors.pointer;
-        ctx.moveTo(0, -40);
-        ctx.lineTo(0, -40 - pointer_lenght);
+        ctx.moveTo(0, -60);
+        ctx.lineTo(0, -60 - pointer_lenght);
         ctx.stroke();
     }
     const canvasRef = (item) => {
@@ -147,7 +143,7 @@ const WindGraphics = (props) => {
     let unit = ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : 'kn';
     let speed = Formatter.formatSpeed(wind.windSpeed,unit);
     return (
-        <WidgetFrame {...props} addClass="windGraphics" unit={unit} caption="Wind" resize={false}>
+        <WidgetFrame {...props} addClass="windGraphics" unit={unit} caption={props.caption} resize={false}>
             <canvas className='widgetData' ref={canvasRef}></canvas>
             <div className="windSpeed">{speed}</div>
             <div className="windReference">{wind.suffix}</div>
@@ -157,30 +153,28 @@ const WindGraphics = (props) => {
 
 WindGraphics.propTypes={
     ...WidgetProps,
-    windSpeed: PropTypes.number,
-    windAngle: PropTypes.number,
-    windAngleTrue:  PropTypes.number,
-    windSpeedTrue:  PropTypes.number,
-    showKnots:  PropTypes.bool,
+    ...WindProps,
+    formatter: PropTypes.func,
     scaleAngle: PropTypes.number,
     nightMode: PropTypes.bool,
-    kind: PropTypes.string, //true,apparent,auto,
     show360: PropTypes.bool
 };
-WindGraphics.storeKeys={
-    windSpeed:  keys.nav.gps.windSpeed,
-    windAngle:  keys.nav.gps.windAngle,
-    windAngleTrue: keys.nav.gps.trueWindAngle,
-    windDirectionTrue: keys.nav.gps.trueWindDirection,
-    windSpeedTrue: keys.nav.gps.trueWindSpeed,
-    visible:    keys.properties.showWind,
-    showKnots:  keys.properties.windKnots,
-    scaleAngle: keys.properties.windScaleAngle
-};
-WindGraphics.formatter='formatSpeed';
-WindGraphics.editableParameters={
-    formatterParameters: true,
-    show360: {type:'BOOLEAN',default:false},
-    kind: {type:'SELECT',list:['auto','trueAngle','trueDirection','apparent'],default:'auto'}
+WindGraphics.predefined= {
+    storeKeys: WindStoreKeys,
+    editableParameters: {
+        scaleAngle: {default:50, displayName: "red/green Angle", type:'NUMBER', list:[5, 90]},
+        show360: {type: 'BOOLEAN', default: false},
+        kind: {type: 'SELECT',
+            list: ['auto', 'trueAngle', 'trueDirection', 'apparent'],
+            default: 'auto',
+            description:'which wind data to be shown\nauto will try apparent, trueAngle, trueDirection and display the first found data'
+        },
+        formatter: true,
+        formatterParameters: true,
+        caption: true
+    },
+    formatter: 'formatSpeed',
+    caption: 'Wind'
 }
+
 export default WindGraphics;

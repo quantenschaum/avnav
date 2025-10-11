@@ -3,6 +3,7 @@ package de.wellenvogel.avnav.worker;
 import android.location.Location;
 import android.os.SystemClock;
 import android.util.Log;
+import android.util.Pair;
 
 import net.sf.marineapi.nmea.parser.DataNotAvailableException;
 import net.sf.marineapi.nmea.parser.SentenceFactory;
@@ -35,6 +36,7 @@ import net.sf.marineapi.nmea.util.DataStatus;
 import net.sf.marineapi.nmea.util.Direction;
 import net.sf.marineapi.nmea.util.Measurement;
 import net.sf.marineapi.nmea.util.Position;
+import net.sf.marineapi.nmea.util.SatelliteInfo;
 import net.sf.marineapi.nmea.util.Units;
 
 import org.json.JSONArray;
@@ -47,6 +49,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 
 import de.wellenvogel.avnav.aislib.messages.message.AisMessage;
@@ -224,117 +227,126 @@ public class Decoder extends Worker {
         }
     }
 
-    static class GSVStore{
-        public static final int MAXGSV=20; //max number of gsv sentences without one that is the last
-        public static final int GSVAGE=60000; //max age of gsv data in ms
-        private int numGsv=0;
-        private int lastReceived=0;
-        private boolean isValid=false;
-        private long validDate=0;
-        private long lastReceivedTime=SystemClock.uptimeMillis();
-        private int sourcePriority=0;
-        private String source;
-        private int numUsed=0;
-        private HashMap<Integer,GSVSentence> sentences=new HashMap<Integer,GSVSentence>();
+    static class GSVStore {
+        static class Sat {
+            public int number;
+            public String talker = "";
+            long lastSeen;
 
-        public GSVStore(int priority, String src){
-            source=src;
-            sourcePriority=priority;
-        }
-        public synchronized void setPriority(int p) {
-            if (p == sourcePriority) return;
-            sourcePriority=p;
-            sentences.clear();
-            numUsed=0;
-            numGsv=0;
-            isValid=false;
-            validDate=0;
-            lastReceived=0;
-            lastReceivedTime=0;
-        }
-        public synchronized void addSentence(GSVSentence gsv){
-            lastReceivedTime=SystemClock.uptimeMillis();
-            if (gsv.isFirst()){
-                numGsv=gsv.getSentenceCount();
-                sentences.clear();
-                isValid=false;
-                validDate=0;
+            public Sat(int number, String talker) {
+                this.number = number;
+                this.talker = talker;
+                this.lastSeen = SystemClock.uptimeMillis();
             }
-            if (sentences.size() >= (numGsv-1) && ! gsv.isLast()){
-                AvnLog.e("too many gsv sentences without last");
-                return;
+
+            boolean valid(long validTime) {
+                return this.lastSeen >= validTime;
             }
-            lastReceived=gsv.getSentenceIndex();
-            sentences.put(gsv.getSentenceIndex(),gsv);
-            if (gsv.isLast()){
-                if (sentences.size() != numGsv){
-                    AvnLog.e("missing GSV sentence expected count="+numGsv+", has="+sentences.size());
+
+            void update(String talker) {
+                if (talker != null) {
+                    this.talker = talker;
                 }
-                isValid=true;
-                validDate=SystemClock.uptimeMillis();
+                this.lastSeen = SystemClock.uptimeMillis();
             }
-        }
-        public synchronized void  setNumUsed(int num){
-                numUsed=num;
-        }
-        public synchronized boolean getValid(){
-            if (! isValid) return false;
-            if (validDate == 0) return false;
-            long now=SystemClock.uptimeMillis();
-            if ((now-validDate) > GSVAGE) return false;
-            return true;
-        }
-        public synchronized int getSatCount(){
-            if (! isValid) return 0;
-            for (GSVSentence s: sentences.values()){
-                return s.getSatelliteCount();
-            }
-            return 0;
-        }
-        public synchronized int getNumUsed(){
-            if (! isValid) return 0;
-            return numUsed;
-        }
-        public synchronized int getSourcePriority() {
-            return sourcePriority;
+
         }
 
-        public String getSource() {
-            return source;
+        long expiryTime;
+        int priority;
+        String source;
+        private final HashMap<Integer, Sat> satellites = new HashMap<Integer, Sat>();
+        private final HashMap<Integer, Sat> used = new HashMap<Integer, Sat>();
+
+        public GSVStore(String source,long expiryTime,int priority) {
+            this.expiryTime = expiryTime;
+            this.priority=priority;
+            this.source=source;
         }
+        synchronized void cleanup() {
+            cleanupUsed();
+            cleanupSats();
+        }
+
+        synchronized void cleanupSats() {
+            long validTime = SystemClock.uptimeMillis() - expiryTime;
+            satellites.entrySet().removeIf(integerSatEntry -> !integerSatEntry.getValue().valid(validTime));
+        }
+
+        synchronized void cleanupUsed() {
+            long validTime = SystemClock.uptimeMillis() - expiryTime;
+            used.entrySet().removeIf(integerSatEntry -> !integerSatEntry.getValue().valid(validTime));
+        }
+
+        synchronized int getSatCount() {
+            return satellites.size();
+        }
+
+        synchronized int getNumUsed() {
+            return used.size();
+        }
+
+        public synchronized void addSentence(GSVSentence gsv) {
+            for (SatelliteInfo info : gsv.getSatelliteInfo()) {
+                int id = Integer.parseInt(info.getId());
+                Sat existing = satellites.get(id);
+                if (existing == null) {
+                    existing = new Sat(id, gsv.getTalkerId().toString());
+                    satellites.put(id, existing);
+                }
+                existing.update(gsv.getTalkerId().toString());
+            }
+            cleanupSats();
+        }
+
+        public synchronized void addSentence(GSASentence gsa) {
+            for (String sid : gsa.getSatelliteIds()) {
+                int id = Integer.parseInt(sid);
+                Sat existing = used.get(id);
+                if (existing == null) {
+                    existing = new Sat(id, gsa.getTalkerId().toString());
+                    used.put(id, existing);
+                }
+                existing.update(gsa.getTalkerId().toString());
+            }
+            cleanupUsed();
+        }
+
     }
 
     static class GSVStores {
-        private HashMap<String,GSVStore> stores=new HashMap<>();
-        public synchronized GSVStore getStore(String k,int priority) {
+        private final HashMap<String,GSVStore> stores=new HashMap<>();
+        public synchronized GSVStore getStore(String k,long expiry,int priority) {
             GSVStore rt=stores.get(k);
             if (rt == null) {
-                rt=new GSVStore(priority,k);
+                rt=new GSVStore(k,expiry,priority);
                 stores.put(k,rt);
             }
-            else {
-                rt.setPriority(priority);
-            }
+            rt.expiryTime=expiry;
+            rt.priority=priority;
             return rt;
         }
-        public synchronized GSVStore getStore(String k){
+        public synchronized GSVStore getStore(String k) {
             return stores.get(k);
         }
+        public synchronized GSVStore getHPStore() {
+            GSVStore found=null;
+            for (GSVStore s:stores.values()){
+                if (found == null || found.priority < s.priority){
+                    found=s;
+                }
+            }
+            return found;
+        }
+
         public synchronized void cleanup(boolean force) {
             if (force) {
                 stores.clear();
                 return;
             }
-            stores.entrySet().removeIf(e->!e.getValue().getValid());
-        }
-        public synchronized GSVStore findHighest(){
-            GSVStore current=null;
-            for (GSVStore store:stores.values()){
-                if (store.getValid() && (current == null || current.getSourcePriority() < store.getSourcePriority()) ){
-                    current=store;
-                }
+            for (GSVStore store : stores.values()){
+                store.cleanup();
             }
-            return current;
         }
     }
     private double convertTransducerValue(String ttype, String tunit, double tval) {
@@ -502,7 +514,7 @@ public class Decoder extends Worker {
                                 line = correctTalker(line);
                                 Sentence s = factory.createParser(line);
                                 if (s instanceof GSVSentence) {
-                                    GSVStore store=gsvStores.getStore(entry.source,entry.priority);
+                                    GSVStore store=gsvStores.getStore(entry.source,posAge,entry.priority);
                                     GSVSentence gsv = (GSVSentence) s;
                                     store.addSentence(gsv);
                                     AvnLog.dfs("%s: GSV sentence (%d/%d) numSat=%d" ,
@@ -511,10 +523,8 @@ public class Decoder extends Worker {
                                     continue;
                                 }
                                 if (s instanceof GSASentence) {
-                                    GSVStore store=gsvStores.getStore(entry.source,entry.priority);
-                                    store.setNumUsed(((GSASentence) s).getSatelliteIds().length);
-                                        AvnLog.dfs("%s: GSA sentence, used=%d",
-                                                getTypeName(), store.getNumUsed());
+                                    GSVStore store=gsvStores.getStore(entry.source,posAge,entry.priority);
+                                    store.addSentence((GSASentence) s);
                                     continue;
                                 }
                                 if (s instanceof MWVSentence) {
@@ -610,7 +620,7 @@ public class Decoder extends Worker {
                                     AvnLog.dfs("%s: MTW sentence",getTypeName() );
                                     try {
                                         double waterTemp = d.getTemperature() + 273.15;
-                                        addNmeaData(this.K_VWTT, waterTemp, entry, posAge);
+                                        addNmeaData(K_VWTT, waterTemp, entry, posAge);
                                     }catch (DataNotAvailableException ignored){}
                                     continue;
                                 }
@@ -726,11 +736,6 @@ public class Decoder extends Worker {
                                                 isValid = qual > 0;
                                                 AvnLog.dfs("%s: GGA sentence, quality=%d, valid=%s", getTypeName(), qual, isValid);
                                             }catch (DataNotAvailableException i){}
-                                            try{
-                                                int satUsed=gga.getSatelliteCount();
-                                                GSVStore gsv=gsvStores.getStore(entry.source,entry.priority);
-                                                gsv.setNumUsed(satUsed);
-                                            }catch(DataNotAvailableException i){}
                                         }
                                     } catch (DataNotAvailableException ignored) {
                                     }
@@ -875,16 +880,17 @@ public class Decoder extends Worker {
             if (e.valid()) pSource=e.source;
             else posValid=false;
         }
-        GSVStore gsv;
-        if (pSource == null){
-            gsv=gsvStores.findHighest();
+        GSVStore gsv=null;
+        if (pSource != null){
+            gsv=gsvStores.getStore(pSource);
         }
         else{
-            gsv=gsvStores.getStore(pSource);
+            gsv=gsvStores.getHPStore();
         }
         SatStatus rt=null;
         if (gsv != null){
-            rt=new SatStatus(gsv.getSatCount(),gsv.getNumUsed(),fetcher.hasData(),gsv.getSource(),posValid);
+            gsv.cleanup();
+            rt=new SatStatus(gsv.getSatCount(),gsv.getNumUsed(),fetcher.hasData(),gsv.source,posValid);
         }
         else {
             rt = new SatStatus(0, 0, fetcher.hasData(),pSource,posValid);
@@ -898,17 +904,42 @@ public class Decoder extends Worker {
         super.stop();
         queue.clear();
     }
+    private interface LocationSetter{
+        void op(Location l,NmeaEntry e);
+    }
+    private static class LocationEntry{
+        public boolean mandatory;
+        public LocationSetter setter;
+        public LocationEntry(boolean mandatory, LocationSetter setter) {
+            this.mandatory = mandatory;
+            this.setter = setter;
+        }
+        public boolean mandatoryOk(NmeaEntry e,long now){
+            return ! mandatory || e.valid(now);
+        }
+        public void set(NmeaEntry e,long now, Location l){
+            if (! e.valid(now)) return;
+            setter.op(l,e);
+        }
+    }
 
-
-
+    private static final Map<String,LocationEntry> locationEntries= new HashMap<String,LocationEntry>(){
+            {
+            put(K_LON,new LocationEntry(true,(l, e) -> l.setLongitude((double)e.value)));
+            put(K_LAT,new LocationEntry(true,(l, e) -> l.setLatitude((double)e.value)));
+            put(K_SPEED,new LocationEntry(false,(l, e) -> l.setSpeed((float)((double)e.value))));
+            put(K_COURSE,new LocationEntry(false,(l, e) -> l.setBearing((float)((double)e.value))));
+    }};
+    private static final String [] locationKeys=locationEntries.keySet().toArray(new String[0]);
     public Location getLocation() throws JSONException {
-        List<NmeaEntry> pos=getEntries(K_LON,K_LAT);
+        List<NmeaEntry> pos=getEntries(locationKeys);
         long current=SystemClock.uptimeMillis();
         Location rt=new Location((String)null);
         for (NmeaEntry e:pos){
-            if (! e.valid(current)) return null;
-            if (K_LAT.equals(e.key)) rt.setLatitude((double)e.value);
-            if (K_LON.equals(e.key)) rt.setLongitude((double)e.value);
+            LocationEntry le=locationEntries.get(e.key);
+            if (le == null) return null; //internal error
+            if (!le.mandatoryOk(e,current)) return null;
+            le.set(e,current,rt);
         }
         return rt;
     }
@@ -982,12 +1013,10 @@ public class Decoder extends Worker {
         }
 
         public int getNumSat() {
-            if (! isValid()) return 0;
             return numSat;
         }
 
         public int getNumUsed() {
-            if (! isValid()) return 0;
             return numUsed;
         }
 
@@ -995,9 +1024,6 @@ public class Decoder extends Worker {
             return gpsEnabled;
         }
 
-        public boolean isValid(){
-            return (SystemClock.uptimeMillis()-createdTime) < GSVStore.GSVAGE;
-        }
         public boolean hasValidPosition(){
             return validPosition;
         }

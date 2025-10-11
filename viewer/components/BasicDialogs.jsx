@@ -31,6 +31,7 @@ import Helper from "../util/helper";
 export const SelectList = ({list, onClick}) => {
     return <div className="selectList">
         {list.map(function (elem) {
+            if (! (elem instanceof Object)) return null;
             let cl=Helper.concatsp('listEntry',elem.selected?'selectedItem':undefined,elem.className);
             return (
                 <div className={cl}
@@ -76,8 +77,8 @@ export const ConfirmDialog = ({title, text, resolveFunction, children}) => {
         ]}/>
     </DialogFrame>
 }
-export const AlertDialog = ({text, resolveFunction,children}) => {
-    return <DialogFrame title={"Alert"}>
+export const AlertDialog = ({text, resolveFunction,children,className}) => {
+    return <DialogFrame title={"Alert"} className={className}>
         <DialogText>{text}</DialogText>
         {children}
         <DialogButtons buttonList={DBOk(resolveFunction )}/>

@@ -23,16 +23,19 @@
  ###############################################################################
  * AIS computations
  */
-
+//https://stackoverflow.com/questions/61406859/web-worker-onerror-event-handler-not-triggered-when-rethrowing-an-error-in-the-c
+self.addEventListener('unhandledrejection', function (event) {
+    // the event object has two special properties:
+    // event.promise - the promise that generated the error
+    // event.reason  - the unhandled error object
+    throw event.reason;
+});
 
 import {handleReceivedAisData} from "./aiscomputations";
 import navobjects from "./navobjects";
 import formatter from '../util/formatter';
 import Requests from "../util/requests";
-import {KeyHelper} from "../util/keys";
-import globalstore from "../util/globalstore";
 import Helper from "../util/helper";
-
 
 let boatData={
     position: new navobjects.Point(undefined,undefined),
@@ -101,6 +104,7 @@ const computeResponse=(messageData)=>{
     fillOptionsAndBoatData(messageData);
     let start = Helper.now();
     let ais = computeAis();
+    let aisWarning;
     if (ais){
         let hideTime=options.hideTime*1000;
         ais.forEach((aisItem)=>{
@@ -114,6 +118,9 @@ const computeResponse=(messageData)=>{
                     if (hidden !== undefined) aisItem.hidden=true;
                 }
             }
+            if (aisItem.nextWarning){
+                aisWarning=aisItem;
+            }
         })
     }
     let done = Helper.now();
@@ -121,7 +128,8 @@ const computeResponse=(messageData)=>{
         type: 'data',
         time: done - start,
         sequence: messageData.sequence,
-        data: ais
+        data: ais,
+        aisWarning: aisWarning
     })
 }
 
@@ -158,8 +166,12 @@ self.onmessage=async ({data})=>{
             handleError(received.error,data.sequence)
             return;
         }
-        receivedAisData=received.data;
-        computeResponse(data);
+        try {
+            receivedAisData = received.data;
+            computeResponse(data);
+        }catch (e){
+            handleError(e,data.sequence,true);
+        }
     }
     if (data.type === 'boat' ){
         let now=Helper.now();
@@ -174,15 +186,27 @@ self.onmessage=async ({data})=>{
             return;
         }
         overloadCount=0;
-        computeResponse(data);
-        lastResponse=now;
+        try {
+            computeResponse(data);
+            lastResponse = now;
+        }catch (e){
+            handleError(e,data.sequence,true);
+        }
     }
     if (data.type === 'config'){
-        computeResponse(data);
+        try {
+            computeResponse(data);
+        }catch(e){
+            handleError(e,data.sequence,true);
+        }
     }
     if (data.type === 'hidden'){
         if (data.hiddenTargets === undefined) return;
         hiddenTargets=data.hiddenTargets;
-        computeResponse(data);
+        try {
+            computeResponse(data);
+        }catch(e){
+            handleError(e,data.sequence,true);
+        }
     }
 }

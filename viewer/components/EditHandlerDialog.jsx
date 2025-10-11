@@ -67,7 +67,7 @@ const EditHandlerDialog=(props)=>{
                 let parameters=[];
                 data.data.forEach((param)=>{
                     let type = param.type;
-                    if (type === 'FILTER') type = 'STRING';
+                    if (type === 'FILTER') param.type = 'STRING';
                     const editableParameterUI=editableParameterUIFactory.createEditableParameterUI(
                         {...param,
                                     list:param.rangeOrList
@@ -147,7 +147,7 @@ const EditHandlerDialog=(props)=>{
     let renderValues={...currentValues,...modifiedValues};
     let dataValid=true;
     parameters.forEach((parameter)=>{
-        if (parameter.hasError(renderValues)) dataValid=false;
+        if (parameter.hasError(renderValues,currentValues)) dataValid=false;
     })
         let renderName=name||'';
         if (props.child){

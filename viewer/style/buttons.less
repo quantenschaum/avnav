@@ -12,7 +12,7 @@
   border: 1px solid;
   text-decoration: none;
   .nightBorderFade(#D3D3D3);
-  .nightBackFade(#E6E6E6);
+  .nightBackColor(#E6E6E6,rgb(30 30 30 / 55%));
   //position: relative;
   cursor: pointer;
   outline: none;
@@ -57,7 +57,7 @@
 }
 .button.active{
   border: 0.3em solid ;
-  .nightBorderFade(@colorGreen);
+  .nightBorderColor(@colorGreen,@nightColor);
   &.MOB{
     .nightBorderFade(@colorRed);
   }
@@ -66,6 +66,9 @@
 .iconButton(@icon){
   span {
     .icon(@icon);
+    .nightMode &{
+      filter: brightness(0) saturate(50%) invert(16%) sepia(98%) saturate(2000%) hue-rotate(353deg) brightness(94%) contrast(111%)
+    }
   }
 }
 
@@ -249,6 +252,12 @@ button{
   &.Measure{
     .iconButton('straighten.svg');
   }
+  &.MeasureOff{
+    .iconButton('straighten-off.svg');
+  }
+  &.CenterAction{
+    .iconButton('center-action.svg');
+  }
 
   &.ShowStatus {
     .iconButton('status.svg');
@@ -409,6 +418,9 @@ button{
   }
   &.Download{
     .iconButton('ic_file_download.svg');
+  }
+  &.Rename{
+    .iconButton('ic_edit_name.svg');
   }
 
   &.DownloadPageUploadCancel{
@@ -586,22 +598,22 @@ button{
   .FeatureInfoDialog &.info{
     .dialogIconButton('ic_info.svg');
   }
-  .FeatureInfoDialog &.goto{
+  .FeatureInfoDialog &.goto, .featureListDialog &.goto{
     .dialogIconButton('waypoint.svg');
   }
-  .FeatureInfoDialog &.add{
+  .FeatureInfoDialog &.add, .featureListDialog &.add{
     .dialogIconButton('wpplus.svg');
     span {
       transform: rotate(180deg);
     }
   }
-  .FeatureInfoDialog &.insert{
+  .FeatureInfoDialog &.insert, .featureListDialog &.insert{
     .dialogIconButton('wpplus.svg');
   }
-  .FeatureInfoDialog &.center{
+  .FeatureInfoDialog &.center, .featureListDialog &.center{
     .dialogIconButton('wpcenter.svg');
   }
-  .FeatureInfoDialog &.routeTo{
+  .FeatureInfoDialog &.routeTo, .featureListDialog &.routeTo{
     .dialogIconButton('wpgoto.svg');
   }
   .FeatureInfoDialog &.editRoute{

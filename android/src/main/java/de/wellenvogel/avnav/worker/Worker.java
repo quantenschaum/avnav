@@ -283,6 +283,15 @@ public abstract class Worker implements IWorker {
         }
         return fallBack?nameAndType:null;
     }
+    public boolean isEnabled(){
+            EditableParameter.EditableParameterInterface enabledIf=getParameter(Worker.ENABLED_PARAMETER,true);
+            EditableParameter.BooleanParameter enabled=(EditableParameter.BooleanParameter)enabledIf;
+        try {
+            return enabled.fromJson(parameters);
+        } catch (JSONException e) {
+            return false;
+        }
+    }
     public void start(PermissionCallback permissionCallback){
         if (mainThread != null){
             stopAndWait();
@@ -290,15 +299,13 @@ public abstract class Worker implements IWorker {
         try {
             //check if we have a defined enabled parameter
             //otherwise use the generic one
-            EditableParameter.EditableParameterInterface enabledIf=getParameter(Worker.ENABLED_PARAMETER,true);
-            EditableParameter.BooleanParameter enabled=(EditableParameter.BooleanParameter)enabledIf;
-            if (enabled.fromJson(parameters)) {
-                if (permissionCallback != null){
-                    NeededPermissions perm=needsPermissions();
-                    if (perm != null){
-                        permissionCallback.permissionNeeded(perm);
-                    }
+            if (permissionCallback != null){
+                NeededPermissions perm=needsPermissions();
+                if (perm != null){
+                    permissionCallback.permissionNeeded(perm);
                 }
+            }
+            if (isEnabled()) {
                 running = true;
                 mainThread = new Thread(new Runnable() {
                     @Override
@@ -327,7 +334,7 @@ public abstract class Worker implements IWorker {
                 status.removeChildren();
                 gpsService.unregisterService(Worker.this.getId());
             }
-        } catch (JSONException e) {
+        } catch (Throwable e) {
             setStatus(WorkerStatus.Status.ERROR,"error: "+e.getMessage());
         }
     }

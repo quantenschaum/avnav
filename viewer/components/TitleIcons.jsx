@@ -24,7 +24,6 @@
  */
 
 import React from 'react';
-import PropTypes from 'prop-types';
 import {anchorWatchDialog, AnchorWatchKeys} from "./AnchorWatchDialog";
 import keys from '../util/keys';
 import {useStore} from "../hoc/Dynamic";
@@ -32,15 +31,23 @@ import globalstore from "../util/globalstore";
 import {showPromiseDialog, useDialogContext} from "./OverlayDialog";
 import globalStore from "../util/globalstore";
 import {ConfirmDialog} from "./BasicDialogs";
+import PropTypes from "prop-types";
 
-export const DynamicTitleIcons=(iprops)=>{
+export const DynamicTitleIcons=({rightOffset})=>{
     const dialogContext=useDialogContext();
-    const props=useStore(iprops,{storeKeys: {...AnchorWatchKeys,show:keys.properties.titleIcons }})
+    const props=useStore({rightOffset},{storeKeys: {...AnchorWatchKeys,show:keys.properties.titleIcons,measure: keys.map.activeMeasure }})
     if (! props.show) return null;
     let cl="iconContainer ";
     if (props.className) cl+=props.className;
     let anchorWatch=props.watchDistance !== undefined;
-    return <div className={cl}>
+    const style={};
+    if (rightOffset){
+        style.paddingRight=rightOffset+"px";
+    }
+    return <div className={cl} style={style} onClick={(ev)=>ev.stopPropagation()}>
+        {props.measure && <span className="measureIcon" onClick={()=>{
+            globalStore.storeData(keys.map.activeMeasure,undefined);
+        }}/> }
         {anchorWatch && <span className="anchorWatchIcon" onClick={() => anchorWatchDialog(dialogContext)}/>}
         {!props.connected && <span className="disconnectedIcon" onClick={()=>{
             if (globalstore.getData(keys.gui.global.onAndroid) ||  !globalStore.getData(keys.gui.capabilities.canConnect)) return;
@@ -51,7 +58,5 @@ export const DynamicTitleIcons=(iprops)=>{
     </div>
 }
 DynamicTitleIcons.propTypes={
-    watchDistance: PropTypes.number,
-    connected: PropTypes.bool,
-    show: PropTypes.bool
+    rightOffset: PropTypes.number
 }

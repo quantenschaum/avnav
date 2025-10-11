@@ -30,7 +30,7 @@ import AisFormatter from "../nav/aisformatter";
 import globalStore from "../util/globalstore";
 import React from "react";
 import {Drawing} from "../map/drawing";
-import MapHolder from "../map/mapholder";
+import MapHolder, {LOCK_MODES} from "../map/mapholder";
 import ItemList from "./ItemList";
 import {DBCancel, DialogButtons, DialogFrame, DialogRow, useDialogContext} from "./OverlayDialog";
 import PropTypes from "prop-types";
@@ -118,7 +118,7 @@ const drawIcon=(canvas,current)=>{
     let [style,symbol,scale]=MapHolder.aislayer.getStyleEntry(current);
     if (! style || ! symbol) return;
     drawing.drawImageToContext([rect.width/2,rect.height/2],symbol.image,style);
-    if (globalStore.getData(keys.properties.aisUseCourseVector) && current.course !== undefined){
+    if (globalStore.getData(keys.properties.aisUseCourseVector) && current.speed > globalStore.getData(keys.properties.aisMinDisplaySpeed) && current.course !== undefined){
         let rd=Math.PI*current.course/180.0;
         let ty = rect.height/2-Math.cos(rd)*rect.height;
         let tx= rect.width/2+Math.sin(rd)*rect.width;
@@ -209,7 +209,7 @@ export const AisInfoWithFunctions=({mmsi,actionCb,buttons,hidden,className})=>{
                 let pos=NavData.getAisHandler().getAisPositionByMmsi(mmsi);
                 if (pos) {
                     MapHolder.setCenter(pos);
-                    MapHolder.setGpsLock(false);
+                    MapHolder.setGpsLock(LOCK_MODES.off);
                 }
                 runCb('AisInfoLocate',mmsi);
             },

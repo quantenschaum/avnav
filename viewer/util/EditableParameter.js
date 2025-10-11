@@ -37,7 +37,8 @@ const assignableProperties={
     description: undefined,
     mandatory: false,
     readOnly: false,
-    checker: undefined
+    checker: undefined,
+    existingUnchecked: false //allow to keep an existing value even if the check would fail (still marking it red in the UI)
 }
 
 export const EditableParameterTypes={
@@ -48,7 +49,10 @@ export const EditableParameterTypes={
     BOOLEAN:5,
     COLOR:6,
     ICON: 7,
-    UNKNOWN: 10
+    KEY: 8,
+    UNKNOWN: 10,
+    WIDGET_BASE: 100,
+    PROP_BASE: 200
 };
 
 
@@ -58,7 +62,7 @@ export class EditableParameter extends Object{
     /**
      * @param plain {Object} object with properties from assignableProperties
      * @param type the type from EditableParameterTypes
-     * @param opt_noFreeze if set - do not freeze the object
+     * @param [opt_noFreeze] {boolean} if set - do not freeze the object
      */
     constructor(plain,type,opt_noFreeze) {
         super();
@@ -75,6 +79,7 @@ export class EditableParameter extends Object{
         for (let k in assignableProperties){
             if (Object.hasOwn(plain,k)){
                 target[k]=plain[k];
+                if (target[k] === null) target[k]=undefined;
             }
             else{
                 if (! onlyExisting) target[k]=assignableProperties[k];
@@ -115,6 +120,7 @@ export class EditableParameter extends Object{
         if (check) {
             if (!this.mandatoryOk(value)) throw new Error("mandatory parameter " + this.name + " missing");
         }
+        if (this.readOnly) return values;
         values[this.name] = value;
         return values;
     }
@@ -222,9 +228,14 @@ export class EditableParameter extends Object{
     /**
      * check if a vlaue is ok
      * @param values
+     * @param [opt_old]
      */
-    hasError(values){
+    hasError(values,opt_old){
         const cv=this.getValue(values);
+        if (opt_old && this.existingUnchecked){
+            const ov=this.getValue(opt_old)
+            if (ov == cv) return false;
+        }
         try{
             this.setValue({},cv,true);
             return false;
@@ -270,7 +281,7 @@ export class EditableBooleanParameter extends EditableParameter{
     }
     toBool(v){
         if (v === undefined) return false;
-        if (v instanceof String){
+        if (typeof(v) === 'string'){
             return v.toLowerCase() === 'true';
         }
         return !!v;
@@ -334,6 +345,18 @@ export class EditableFloatParameter extends EditableParameter{
     constructor(plain,opt_noFreeze) {
         super(plain,EditableFloatParameter.TYPE,opt_noFreeze);
     }
+    getRange() {
+        let rt={};
+        const list = this.getList();
+        if (! list || ! (list instanceof Array)) return rt;
+        if (list.length >= 1) {
+            rt.min = parseFloat(list[0]);
+        }
+        if (list.length >= 2) {
+            rt.max = parseFloat(list[1]);
+        }
+        return rt;
+    }
     setValue(values, value,check) {
         let parsed=(value!==undefined)?parseFloat(value):value;
         if (check){
@@ -373,6 +396,11 @@ export class EditableSelectParameter extends EditableParameter{
         super(plain,EditableSelectParameter.TYPE,opt_noFreeze);
         const theList=super.getList();
         if (theList === undefined) throw new Error("missing list parameter for select "+this.name);
+        if (theList instanceof Promise){
+            //"silent" resolve - do nothing
+            theList.then(()=>{},()=>{});
+            return;
+        }
         if (! (theList instanceof Array) ) throw new Error("list parameter must be an array or a function for "+this.name);
         theList.forEach((item)=>{
             if (item === undefined) return;
@@ -383,34 +411,76 @@ export class EditableSelectParameter extends EditableParameter{
     }
     getList(){
         let list=super.getList();
-        if (!(list instanceof Array)) {
-            //just get a list with the default value
-            list=[];
-            if (this.default !== undefined) list.push(this.default);
-            return list;
+        const fillDefault=(clist)=>{
+            if (!(clist instanceof Array)) {
+                //just get a list with the default value
+                clist=[];
+                if (this.default !== undefined) clist.push(this.default);
+                return clist;
+            }
+            return clist;
         }
-        return list;
+        if (list instanceof Promise){
+            return list.then((plist)=>{return fillDefault(plist)})
+        }
+        return fillDefault(list);
     }
     setValue(values, value,check) {
         if (check){
             const list=this.getList();
-            let found=false;
-            for (let i=0;i<list.length;i++){
-                const lv=EditableSelectParameter.getValueFromListEntry(list[i]);
-                //intentionally allow to convert e.g. strings to numbers
-                if (lv == value){
-                    value=lv;
-                    found=true;
-                    break;
+            if (!(list instanceof Promise)) {
+                let found = false;
+                for (let i = 0; i < list.length; i++) {
+                    const lv = EditableSelectParameter.getValueFromListEntry(list[i]);
+                    //intentionally allow to convert e.g. strings to numbers
+                    if (lv == value) {
+                        value = lv;
+                        found = true;
+                        break;
+                    }
                 }
+                if (!found) throw new Error("value " + value + " for " + this.name + " not in list");
             }
-            if (! found) throw new Error("value "+value+" for "+this.name+" not in list");
+            else{
+                //silent resolve
+                list.then(()=>{},()=>{});
+            }
         }
         return super.setValue(values, value,check);
     }
     getValue(values) {
         const rt=super.getValue(values);
         return rt;
+    }
+}
+
+export class EditableKeyParameter extends EditableParameter{
+    static TYPE=EditableParameterTypes.KEY;
+    static KEY='storeKeys';
+    constructor(plain,opt_noFreeze) {
+        super(plain,EditableKeyParameter.TYPE,opt_noFreeze);
+    }
+    setValue(values, value,check) {
+        if (! values) values={};
+        if (check){
+            if (! this.mandatoryOk(value)) throw new Error("missing mandatory value for "+this.name);
+        }
+        if (this.readOnly) return values;
+        const current=values[EditableKeyParameter.KEY]||{};
+        if (! value){
+            delete current[this.name];
+        }
+        else {
+            current[this.name] = value;
+        }
+        values[EditableKeyParameter.KEY]=current;
+        return values;
+    }
+    getValue(values) {
+        if (! values) values={};
+        const current=values[EditableKeyParameter.KEY]||{};
+        if (this.name in current) return current [this.name];
+        return this.default;
     }
 }
 
@@ -424,6 +494,7 @@ export class EditableColorParameter extends EditableStringParameterBase{
     static TYPE=EditableParameterTypes.COLOR;
     constructor(plain,opt_noFreeze) {
         super({checker:(cv)=>{
+            if (! cv) return true;
             return CSS.supports('color',cv);
             },...plain},EditableColorParameter.TYPE,opt_noFreeze);
     }
@@ -464,7 +535,8 @@ const editableParameters=[
     EditableFloatParameter,
     EditableSelectParameter,
     EditableIconParameter,
-    EditableColorParameter
+    EditableColorParameter,
+    EditableKeyParameter
 ];
 
 const editableParameterFactory=new EditableParameterFactory(editableParameters);

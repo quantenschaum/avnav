@@ -8,19 +8,18 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import MapPage,{overlayDialog} from '../components/MapPage.jsx';
 import Toast from '../components/Toast.jsx';
 import NavHandler from '../nav/navdata.js';
-import OverlayDialog, {
+import {
     DBCancel,
-    DialogButtons, DialogDisplay,
-    DialogFrame, DialogRow,
-    DialogText, showDialog, useDialogContext
+    DialogButtons, DialogFrame, DialogRow,
+    DialogText, OverlayDialog, showDialog, showPromiseDialog, useDialogContext
 } from '../components/OverlayDialog.jsx';
-import Helper from '../util/helper.js';
+import Helper, {injectav} from '../util/helper.js';
 import {
     useKeyEventHandlerPlain,
     useStoreHelper,
     useTimer
 } from '../util/GuiHelpers.js';
-import MapHolder from '../map/mapholder.js';
+import MapHolder, {EventTypes, LOCK_MODES} from '../map/mapholder.js';
 import navobjects from '../nav/navobjects.js';
 import ButtonList from '../components/ButtonList.jsx';
 import WayPointDialog, {updateWaypoint} from '../components/WaypointDialog.jsx';
@@ -32,7 +31,7 @@ import EditPageDialog from '../components/EditPageDialog.jsx';
 import anchorWatch, {AnchorWatchKeys, isWatchActive} from '../components/AnchorWatchDialog.jsx';
 import Mob from '../components/Mob.js';
 import Dimmer from '../util/dimhandler.js';
-import FeatureInfoDialog from "../components/FeatureInfoDialog";
+import {CenterActionButton, GuardedFeatureListDialog, hideAction, linkAction} from "../components/FeatureInfoDialog";
 import {TrackConvertDialog} from "../components/TrackConvertDialog";
 import FullScreen from '../components/Fullscreen';
 import DialogButton from "../components/DialogButton";
@@ -40,16 +39,29 @@ import RemoteChannelDialog from "../components/RemoteChannelDialog";
 import assign from 'object-assign';
 import WidgetFactory from "../components/WidgetFactory";
 import ItemList from "../components/ItemList";
-import mapholder from "../map/mapholder.js";
-import {PageFrame, PageLeft} from "../components/Page";
+import Page, {PageFrame, PageLeft} from "../components/Page";
 import Requests from "../util/requests";
 import {AisInfoWithFunctions} from "../components/AisInfoDisplay";
 import MapEventGuard from "../hoc/MapEventGuard";
-import {useStoreState} from "../hoc/Dynamic";
+import {
+    BoatFeatureInfo,
+    FeatureAction,
+    FeatureInfo, RouteFeatureInfo, WpFeatureInfo
+} from "../map/featureInfo";
+import {loadRoutes} from "../components/RouteInfoHelper";
+import routeobjects, {Measure} from "../nav/routeobjects";
+import {KeepFromMode} from "../nav/routedata";
+import {ConfirmDialog} from "../components/BasicDialogs";
+import navdata from "../nav/navdata.js";
+import base from "../base";
+import {checkName, ItemNameDialog, nameProposal} from "../components/ItemNameDialog";
+import {ItemActions} from "../components/FileDialog";
+import {showErrorList} from "../components/ErrorListDialog";
 
 const RouteHandler=NavHandler.getRoutingHandler();
 
 const activeRoute=new RouteEdit(RouteEdit.MODES.ACTIVE);
+const editorRoute = new RouteEdit(RouteEdit.MODES.EDIT);
 
 const PAGENAME='navpage';
 
@@ -100,41 +112,28 @@ const startWaypointDialog=(item,idx,dialogCtx)=>{
             okCallback={wpChanged}/>
     );
 };
-
-const setBoatOffset=()=>{
-    if (! globalStore.getData(keys.nav.gps.valid)) return;
-    let pos=globalStore.getData(keys.nav.gps.position);
-    if (! pos) return;
-    let ok=MapHolder.setBoatOffset(pos);
-    return ok;
-}
 const showLockDialog=(dialogContext)=>{
-    const LockDialog=(props)=>{
+    const LockDialog=()=>{
         return <div className={'LockDialog inner'}>
             <h3 className="dialogTitle">{'Lock Boat'}</h3>
             <div className={'dialogButtons'}>
                 <DialogButton
                     name={'current'}
                     onClick={()=>{
-                        props.closeCallback();
-                        if (!setBoatOffset()) return;
-                        MapHolder.setGpsLock(true);
+                        MapHolder.setGpsLock(LOCK_MODES.current);
                     }}
                 >
                     Current</DialogButton>
                 <DialogButton
                     name={'center'}
                     onClick={()=>{
-                        props.closeCallback();
-                        MapHolder.setBoatOffset();
-                        MapHolder.setGpsLock(true);
+                        MapHolder.setGpsLock(LOCK_MODES.center);
                     }}
                 >
                     Center
                 </DialogButton>
                 <DialogButton
                     name={'cancel'}
-                    onClick={()=>props.closeCallback()}
                 >
                     Cancel
                 </DialogButton>
@@ -145,7 +144,7 @@ const showLockDialog=(dialogContext)=>{
 }
 
 const setCenterToTarget=()=>{
-    MapHolder.setGpsLock(false);
+    MapHolder.setGpsLock(LOCK_MODES.off);
     if (activeRoute.anchorWatch() !== undefined){
         MapHolder.setCenter(activeRoute.getCurrentFrom());
     }
@@ -156,7 +155,7 @@ const setCenterToTarget=()=>{
 
 const navNext=()=>{
     if (!activeRoute.hasRoute() ) return;
-    RouteHandler.wpOn(activeRoute.getNextWaypoint())
+    RouteHandler.wpOn(activeRoute.getNextWaypoint(),KeepFromMode.OLDTO);
 };
 
 const navToWp=(on)=>{
@@ -170,7 +169,7 @@ const navToWp=(on)=>{
             wp.name=current.name;
         }
         else{
-            wp.name = 'Marker';
+            wp.name = globalStore.getData(keys.properties.markerDefaultName);
         }
         wp.routeName=undefined;
         center.assign(wp);
@@ -180,8 +179,18 @@ const navToWp=(on)=>{
     RouteHandler.routeOff();
     MapHolder.triggerRender();
 };
+const gotoFeature=(featureInfo,opt_noRoute)=>{
+    let target = featureInfo.point;
+    if (!target) return;
+    if (opt_noRoute && target instanceof navobjects.WayPoint) {
+        target=target.clone()
+        delete target.routeName;
+    }
+    if (! target.name) target.name=globalStore.getData(keys.properties.markerDefaultName);
+    RouteHandler.wpOn(target);
+}
 const OVERLAYPANEL="overlay";
-const getCurrentMapWidgets=(sequence) =>{
+const getCurrentMapWidgets=() =>{
     let current = getPanelWidgets(OVERLAYPANEL);
     let idx = 0;
     let rt = [];
@@ -194,7 +203,6 @@ const getCurrentMapWidgets=(sequence) =>{
 }
 const MapWidgetsDialog =()=> {
     const dialogContext=useDialogContext();
-    const [layoutSequence]=useStoreState(keys.gui.global.layoutSequence);
     const onItemClick = useCallback((item)=>{
         dialogContext.showDialog(()=><EditWidgetDialogWithFunc
             widgetItem={item}
@@ -203,13 +211,14 @@ const MapWidgetsDialog =()=> {
             opt_options={{fixPanel:true,types:['map']}}
         />)
     },[]);
-    const items=getCurrentMapWidgets(layoutSequence);
+    const items=getCurrentMapWidgets();
     return <DialogFrame className={'MapWidgetsDialog'} title={"Map Widgets"}>
             {items && items.map((item)=>{
                 let theItem=item;
                 return <DialogRow
                     className={'lisEntry'}
                     onClick={()=>onItemClick(theItem)}
+                    key={theItem.name}
                     >
                     {item.name}
                 </DialogRow>
@@ -292,8 +301,7 @@ const OverlayContent=({showWpButtons,setShowWpButtons,dialogCtxRef})=>{
             },
             onClick:()=>{
                 setShowWpButtons(false);
-                activeRoute.moveIndex(1);
-                RouteHandler.wpOn(activeRoute.getPointAt());
+                navNext();
 
             }
         },
@@ -373,8 +381,65 @@ const OverlayContent=({showWpButtons,setShowWpButtons,dialogCtxRef})=>{
     </React.Fragment>
 }
 const needsChartLoad=()=>{
-    if (mapholder.getCurrentChartEntry()) return;
-    return mapholder.getLastChartKey()
+    if (MapHolder.getCurrentChartEntry()) return;
+    return MapHolder.getLastChartKey()
+}
+const createRouteFeatureAction=(history,opt_fromMeasure)=>{
+    return new FeatureAction({
+        name:'ShowRoutePanel',
+        label: opt_fromMeasure?'To Route':'New Route',
+        onClick: (featureInfo,listCtx)=>{
+            let measure;
+            if (opt_fromMeasure){
+                measure=globalStore.getData(keys.map.activeMeasure);
+                if (!measure) return;
+                if (measure.points.length < 1) return;
+            }
+            loadRoutes()
+                .then( (routes)=> {
+                    const checkRouteName=(name)=>{
+                        return checkName(name,routes,(item)=>item.name);
+                    }
+                    showPromiseDialog(listCtx, (dprops) => <ItemNameDialog
+                        {...dprops}
+                        title={"Select Name for new Route"}
+                        checkName={checkRouteName}
+                        mandatory={true}
+                        fixedExt={'gpx'}
+                        iname={nameProposal('route')}
+                    />)
+                        .then((res) => {
+                            listCtx.closeDialog();
+                            const isConnected=globalStore.getData(keys.properties.connectedMode);
+                            let newRoute = measure ? measure.clone() : new routeobjects.Route();
+                            const action=ItemActions.create({type:'route'},isConnected);
+                            newRoute.setName(action.nameForUpload(res.name));
+                            newRoute.server = isConnected;
+                            if (!measure) {
+                                newRoute.addPoint(0, featureInfo.point);
+                                editorRoute.setRouteAndIndex(newRoute, 0);
+                            } else {
+                                editorRoute.setRouteAndIndex(newRoute, newRoute.getIndexFromPoint(featureInfo.point))
+                            }
+                            history.push("editroutepage", {center: true});
+                        }, () => {
+                        })
+                })
+                .catch(()=>{})
+
+        },
+        close:false,
+        condition: (featureInfo)=>{
+            if (featureInfo.getType() === FeatureInfo.TYPE.waypoint) return false;
+            if (featureInfo.getType() === FeatureInfo.TYPE.boat) return false;
+            if (featureInfo.getType() === FeatureInfo.TYPE.anchor) return false;
+            if (featureInfo.getType() === FeatureInfo.TYPE.route && ! featureInfo.isOverlay) return false;
+            if (! featureInfo.validPoint()) return false;
+            if (opt_fromMeasure && (featureInfo.getType() !== FeatureInfo.TYPE.measure)) return false;
+            if (!opt_fromMeasure && (featureInfo.getType() === FeatureInfo.TYPE.measure)) return false;
+            return true;
+        }
+    })
 }
 const NavPage=(props)=>{
     const dialogCtx=useRef();
@@ -382,17 +447,18 @@ const NavPage=(props)=>{
     useStoreHelper(()=>MapHolder.triggerRender(),keys.gui.global.layoutSequence);
     const [sequence,setSequence]=useState(0);
     const checkChartCount=useRef(30);
+    const history=props.history;
     const loadTimer = useTimer((seq) => {
         if (!needsChartLoad()) return;
         checkChartCount.current--;
         if (checkChartCount.current < 0) {
-            props.history.pop();
+            history.pop();
         }
         Requests.getJson("?request=list&type=chart", {timeout: 3 * parseFloat(globalStore.getData(keys.properties.networkTimeout))}).then((json) => {
             (json.items || []).forEach((chartEntry) => {
                 if (!chartEntry.key) chartEntry.key = chartEntry.chartKey || chartEntry.url;
                 if (chartEntry.key === neededChart) {
-                    mapholder.setChartEntry(chartEntry);
+                    MapHolder.setChartEntry(chartEntry);
                     setSequence(sequence + 1);
                     return;
                 }
@@ -404,26 +470,36 @@ const NavPage=(props)=>{
             });
     }, 1000);
     useEffect(() => {
-        globalStore.storeData(keys.map.measurePosition,undefined);
+        globalStore.storeData(keys.map.activeMeasure,undefined);
         activeRoute.setIndexToTarget();
-        if (globalStore.getData(keys.properties.mapLockMode) === 'center'){
+        /*if (globalStore.getData(keys.properties.mapLockMode) === 'center'){
             MapHolder.setBoatOffset();
-        }
+        }*/
         const neededChart = needsChartLoad();
         if (neededChart) {
             loadTimer.startTimer();
         }
         MapHolder.showEditingRoute(false);
         return ()=>{
-            globalStore.storeData(keys.map.measurePosition,undefined);
+            globalStore.storeData(keys.map.activeMeasure,undefined);
         }
     }, []);
     const wpTimer=useTimer(()=>{
             setWpButtonsVisible(false);
         },globalStore.getData(keys.properties.wpButtonTimeout)*1000);
-    useKeyEventHandlerPlain('page',"centerToTarget", setCenterToTarget);
-    useKeyEventHandlerPlain('page',"navNext",navNext);
-    useKeyEventHandlerPlain('page',"toggleNav",()=>navToWp(!activeRoute.hasActiveTarget()));
+    useKeyEventHandlerPlain("centerToTarget",'page', setCenterToTarget);
+    useKeyEventHandlerPlain("navNext",'page',navNext);
+    useKeyEventHandlerPlain("toggleNav",'page',()=>navToWp(!activeRoute.hasActiveTarget()));
+    useEffect(() => {
+        if (! globalStore.getData(keys.properties.aisShowErrors)) return;
+        if (LayoutHandler.isEditing()) return;
+        showErrorList({
+            dialogCtx:dialogCtx,
+            title: 'AIS Errors',
+            className: 'AisErrorDialog',
+            fillFunction: ()=>NavHandler.getAisHandler().getErrors()
+        });
+    }, []);
     const showAisInfo=useCallback((mmsi)=>{
         if (! mmsi) return;
         showDialog(dialogCtx,()=>{
@@ -431,12 +507,12 @@ const NavPage=(props)=>{
                 mmsi={mmsi}
                 actionCb={(action,m)=>{
                     if (action === 'AisInfoList'){
-                        props.history.push('aispage', {mmsi: m});
+                        history.push('aispage', {mmsi: m});
                     }
                 }}
             />;
         })
-    },[]);
+    },[history]);
     const showWpButtons=useCallback((on)=>{
         if (on) {
             wpTimer.startTimer();
@@ -446,14 +522,18 @@ const NavPage=(props)=>{
         }
         if (wpButtonsVisible === on) return;
         setWpButtonsVisible(on);
-    },[]);
-    const widgetClick=useCallback((item,data,panel,invertEditDirection)=>{
+    },[wpButtonsVisible]);
+    const widgetClick=useCallback((ev)=>{
+        const avev=injectav(ev);
+        const item=avev.avnav.item||{};
+        const panel=avev.avnav.panelName||"";
         let pagePanels=LayoutHandler.getPagePanels(PAGENAME);
         let idx=pagePanels.indexOf(OVERLAYPANEL);
         if (idx >=0){
             pagePanels.splice(idx,1);
         }
         if (LayoutHandler.isEditing()) {
+            const invertEditDirection=avev.avnav.invertEditDirection;
             showDialog(dialogCtx, () => <EditWidgetDialogWithFunc
                 widgetItem={item}
                 pageWithOptions={PAGENAME}
@@ -463,7 +543,7 @@ const NavPage=(props)=>{
             return;
         }
         if (item.name == "AisTarget"){
-            let mmsi=(data && data.mmsi)?data.mmsi:item.mmsi;
+            let mmsi=avev.avnav.mmsi;
             showAisInfo(mmsi);
             return;
         }
@@ -471,7 +551,7 @@ const NavPage=(props)=>{
             if (!activeRoute.hasRoute()) return;
             activeRoute.setIndexToTarget();
             activeRoute.syncTo(RouteEdit.MODES.EDIT);
-            props.history.push("editroutepage");
+            history.push("editroutepage");
             return;
         }
         if (item.name == "Zoom"){
@@ -483,97 +563,165 @@ const NavPage=(props)=>{
             showWpButtons(true);
             return;
         }
-        props.history.push("gpspage",{widget:item.name});
+        history.push("gpspage",{widget:item.name});
 
-    },[]);
+    },[history]);
 
-    const mapEvent=useCallback((evdata)=>{
-        console.log("mapevent: "+evdata.type);
-        if (evdata.type === MapHolder.EventTypes.SELECTAIS){
-            let aisparam=evdata.aisparam;
-            if (!aisparam) return;
-            if (aisparam.mmsi){
-                showAisInfo(aisparam.mmsi);
-                return true;
-            }
-            return;
-        }
-        if (evdata.type === MapHolder.EventTypes.FEATURE){
-            let feature=evdata.feature;
-            if (! feature) return;
-            feature.additionalActions=[];
-            feature.additionalInfoRows=[];
-            const showFeature=()=>{
-                if (feature.nextTarget && ! feature.activeRoute) {
-                    feature.additionalActions.push(
-                        {
-                            name: 'goto', label: 'Goto', onClick: () => {
-                                let target = feature.nextTarget;
-                                if (!target) return;
-                                RouteHandler.wpOn(target);
-                            }
-                        }
-                    );
+    const mapEvent = useCallback((evdata) => {
+        base.log("mapevent: " + evdata.type);
+        if (evdata.type === EventTypes.FEATURE) {
+            const featureList=evdata.feature;
+            const additionalActions = [];
+            additionalActions.push(new FeatureAction({
+                name:'StopNav',
+                label:'StopNav',
+                onClick:()=>{
+                    RouteHandler.wpOn();
+                },
+                condition:(featureInfo)=>featureInfo instanceof WpFeatureInfo
+            }))
+            additionalActions.push(new FeatureAction({
+                name: 'goto',
+                label: 'Goto',
+                onClick: (featureInfo) => {
+                    gotoFeature(featureInfo,true);
+                },
+                condition: (featureInfo) => {
+                    return featureInfo.validPoint() &&
+                        !(featureInfo instanceof WpFeatureInfo ) &&
+                        ! (featureInfo instanceof BoatFeatureInfo)
                 }
-                showDialog(dialogCtx,()=><FeatureInfoDialog history={props.history} {...feature}/>)
-            }
-            if (feature.overlayType === 'route' && ! feature.activeRoute){
-                let currentRouteName=activeRoute.getRouteName();
-                if (Helper.getExt(currentRouteName) !== 'gpx') currentRouteName+='.gpx';
-                if (activeRoute.hasActiveTarget() && currentRouteName === feature.overlayName){
-                    //do not show a feature pop up if we have an overlay that exactly has the current route
-                    return false;
+            }));
+            additionalActions.push(new FeatureAction({
+                name: 'start',
+                label: 'Start',
+                onClick: (featureInfo) => {
+                    gotoFeature(featureInfo);
+                },
+                condition: (featureInfo) => {
+                    return featureInfo.validPoint() &&
+                        !(featureInfo instanceof WpFeatureInfo ) &&
+                        ! (featureInfo instanceof BoatFeatureInfo) &&
+                        (featureInfo instanceof RouteFeatureInfo)
                 }
-            }
-            if (feature.overlayType === 'track'){
-                feature.additionalActions.push({
-                   name:'toroute',
-                   label: 'Convert',
-                   onClick:(cprops)=>{
-                       showDialog(dialogCtx,()=><TrackConvertDialog history={props.history} name={cprops.overlayName}/>)
-                   }
-                });
-            }
-            if (feature.overlayType !== 'route' || ! feature.nextTarget){
-                showFeature()
-            } else {
-                let currentTarget=activeRoute.getCurrentTarget();
-                //show a "routeTo" if this is not the current target
-                if (! feature.activeRoute || ! currentTarget ||
-                    ! currentTarget.compare(feature.nextTarget)
-                ) {
-                    feature.additionalActions.push({
-                        name: 'routeTo',
-                        label: 'Route',
-                        onClick: (props) => {
-                            RouteHandler.wpOn(props.nextTarget);
+            }));
+            additionalActions.push(new FeatureAction({
+                name:'center',
+                label:'Center',
+                onClick:(featureInfo)=>{
+                    if (MapHolder.getGpsLock()) return;
+                    MapHolder.setCenter(featureInfo.point);
+                    MapHolder.triggerRender();
+                },
+                condition: (featureInfo)=>{
+                    return featureInfo.validPoint();
+                }
+            }))
+            additionalActions.push(new FeatureAction({
+                name: 'toroute',
+                label: 'Convert',
+                onClick: (featureInfo) => {
+                    showDialog(dialogCtx, () => <TrackConvertDialog history={history}
+                                                                    name={featureInfo.urlOrKey}/>)
+                },
+                condition: (featureInfo) => featureInfo.getType() === FeatureInfo.TYPE.track
+            }));
+            additionalActions.push(new FeatureAction({
+                name: 'editRoute',
+                label: 'Edit',
+                onClick: (featureInfo) => {
+                    let nextTarget = featureInfo.point;
+                    if (!nextTarget) return;
+                    RouteHandler.fetchRoute(featureInfo.urlOrKey, false,
+                        (route) => {
+                            let idx = route.findBestMatchingIdx(nextTarget);
+                            editorRoute.setNewRoute(route, idx >= 0 ? idx : undefined);
+                            history.push("editroutepage",{center:true});
                         },
-                        condition: (props) => props.nextTarget
-                    });
-                }
-                feature.additionalActions.push({
-                    name:'editRoute',
-                    label:'Edit',
-                    onClick:()=>{
-                        let nextTarget= feature.nextTarget;
-                        if (! nextTarget) return;
-                        RouteHandler.fetchRoute(feature.overlayName,false,
-                            (route)=>{
-                                let idx=route.findBestMatchingIdx(nextTarget);
-                                let editor=new RouteEdit(RouteEdit.MODES.EDIT);
-                                editor.setNewRoute(route,idx >= 0?idx:undefined);
-                                props.history.push("editroutepage");
-                            },
-                            (error)=> {
-                                if (error) Toast(error);
-                            });
+                        (error) => {
+                            if (error) Toast(error);
+                        });
+                },
+                condition: (featureInfo) => featureInfo.getType() === FeatureInfo.TYPE.route && featureInfo.isOverlay
+            }));
+            additionalActions.push(new FeatureAction({
+                name: 'editRoute',
+                label: 'Edit',
+                onClick: (featureInfo) => {
+                    activeRoute.setNewIndex(activeRoute.getIndexFromPoint(featureInfo.point,true));
+                    activeRoute.syncTo(RouteEdit.MODES.EDIT);
+                    history.push("editroutepage",{center:true});
+                },
+                condition: (featureInfo) => featureInfo.getType() === FeatureInfo.TYPE.route && ! featureInfo.isOverlay
+            }));
+            additionalActions.push(createRouteFeatureAction(history,true));
+            additionalActions.push(new FeatureAction({
+                name: 'Delete',
+                label: 'Clean Track',
+                onClick:()=>{
+                    showPromiseDialog(dialogCtx,(dp)=><ConfirmDialog
+                        {...dp}
+                        title={'Empty Current Track'}
+                        text={'Clean current track data and rename files?'}
+                    />)
+                    .then(()=>navdata.resetTrack(true),()=>{})
+                },
+                condition:(featureInfo)=>featureInfo.getType() === FeatureInfo.TYPE.track && ! featureInfo.isOverlay && globalStore.getData(keys.properties.connectedMode)
+            }))
+            additionalActions.push(hideAction);
+            additionalActions.push(linkAction(history));
+            const listActions=[
+                new FeatureAction({
+                    name: 'goto',
+                    label: 'Goto',
+                    onClick: (featureInfo) => {
+                        gotoFeature(featureInfo);
+                    },
+                    condition: (featureInfo)=>featureInfo.validPoint() &&
+                        //could only be base boat or anchor
+                        featureInfo.getType() === FeatureInfo.TYPE.base
+
+                }),
+                createRouteFeatureAction(history)
+            ]
+            const measure=globalStore.getData(keys.map.activeMeasure);
+            listActions.push(new FeatureAction({
+                name: 'Measure',
+                label: (measure === undefined)?'Measure':'+ Measure',
+                onClick: (featureInfo)=>{
+                    if (MapHolder.getGpsLock()) return;
+                    let newMeasure;
+                    if (measure){
+                        newMeasure=measure.clone();
                     }
-                });
-                showFeature();
-            }
+                    else{
+                        newMeasure=new Measure('default');
+                    }
+                    newMeasure.addPoint(-99,featureInfo.point);
+                    MapHolder.setCenter(featureInfo.point);
+                    globalStore.storeData(keys.map.activeMeasure,newMeasure);
+                },
+                condition: ()=>!MapHolder.getGpsLock()
+            }))
+            listActions.push(new FeatureAction({
+                name: 'MeasureOff',
+                label: 'Measure',
+                onClick: ()=>{
+                    globalStore.storeData(keys.map.activeMeasure,undefined)
+                },
+                condition: ()=>globalStore.getData(keys.map.activeMeasure) !== undefined,
+                toggle: true
+            }))
+            showDialog(dialogCtx,(dprops)=><GuardedFeatureListDialog
+                {...dprops}
+                featureList={featureList}
+                additionalActions={additionalActions}
+                history={history}
+                listActions={listActions}
+            />)
             return true;
         }
-    },[]);
+    }, [history]);
     const buttons=[
             {
                 name: "ZoomIn",
@@ -593,20 +741,21 @@ const NavPage=(props)=>{
                 },
                 onClick:()=>{
                     let old=globalStore.getData(keys.map.lockPosition);
-                    if (! old){
+                    let mapLockMode=LOCK_MODES.center;
+                    if (!old /*off or undefined*/){
                         let lockMode=globalStore.getData(keys.properties.mapLockMode,'center');
                         if ( lockMode === 'ask'){
                             showLockDialog(dialogCtx);
                             return;
                         }
                         if (lockMode === 'current'){
-                            if (! setBoatOffset()) return;
-                        }
-                        else{
-                            MapHolder.setBoatOffset();
+                            mapLockMode=LOCK_MODES.current;
                         }
                     }
-                    MapHolder.setGpsLock(!old);
+                    else{
+                        mapLockMode=LOCK_MODES.off;
+                    }
+                    MapHolder.setGpsLock(mapLockMode);
                 },
                 editDisable:true
             },
@@ -649,7 +798,7 @@ const NavPage=(props)=>{
                 onClick:()=>{
                     if (activeRoute.getIndex() < 0 ) activeRoute.setIndexToTarget();
                     activeRoute.syncTo(RouteEdit.MODES.EDIT);
-                    props.history.push("editroutepage");
+                    history.push("editroutepage");
                 },
                 overflow: true
 
@@ -684,27 +833,8 @@ const NavPage=(props)=>{
                 },
                 overflow: true
             },
-            {
-                name: 'Measure',
-                storeKeys: {
-                    toggle: keys.map.measurePosition,
-                    visible: keys.properties.showMeasure
-                },
-                overflow: true,
-                onClick: ()=>{
-                    let current=globalStore.getData(keys.map.measurePosition);
-                    if (current){
-                        globalStore.storeData(keys.map.measurePosition,undefined);
-                        MapHolder.triggerRender();
-                        return;
-                    }
-                    if (MapHolder.getGpsLock()) return;
-                    let center = globalStore.getData(keys.map.centerPosition);
-                    globalStore.storeData(keys.map.measurePosition,center);
-                    MapHolder.triggerRender();
-                }
-            },
-            Mob.mobDefinition(props.history),
+            CenterActionButton,
+            Mob.mobDefinition(history),
             EditPageDialog.getButtonDef(PAGENAME,
                 MapPage.PANELS,
                 [LayoutHandler.OPTIONS.SMALL,LayoutHandler.OPTIONS.ANCHOR]),
@@ -717,7 +847,7 @@ const NavPage=(props)=>{
             LayoutFinishedDialog.getButtonDef(undefined,dialogCtx.current),
             LayoutHandler.revertButtonDef((pageWithOptions)=>{
                 if (pageWithOptions.location !== props.location){
-                    props.history.replace(pageWithOptions.location,pageWithOptions.options);
+                    history.replace(pageWithOptions.location,pageWithOptions.options);
                 }
             }),
             RemoteChannelDialog({overflow:true},dialogCtx),
@@ -725,7 +855,7 @@ const NavPage=(props)=>{
             Dimmer.buttonDef(),
             {
                 name: 'Cancel',
-                onClick: ()=>{props.history.pop()}
+                onClick: ()=>{history.pop()}
             }
         ];
         let autohide=undefined;
@@ -740,18 +870,19 @@ const NavPage=(props)=>{
                     {...pageProperties}
                     id={PAGENAME}>
                     <PageLeft dialogCtxRef={dialogCtx}>
-                        <DialogDisplay
-                            closeCallback={() => props.history.pop()}>
+                        <OverlayDialog
+                            closeCallback={() => history.pop()}>
                             <DialogFrame title={"Waiting for chart"}>
                                 <DialogText>{neededChart}</DialogText>
                                 <DialogButtons buttonList={DBCancel()}/>
                             </DialogFrame>
-                        </DialogDisplay>
+                        </OverlayDialog>
                     </PageLeft>
                     <ButtonList itemList={buttons}/>
                 </PageFrame>
             );
         }
+
         return (
             <MapPage
                 {...pageProperties}
@@ -768,11 +899,10 @@ const NavPage=(props)=>{
                         dialogCtxRef={dialogCtx}
                     />}
                 buttonList={buttons}
-                preventCenterDialog={(props.options||{}).remote}
                 autoHideButtons={autohide}
                 dialogCtxRef={dialogCtx}
                 />
         );
 }
-
+NavPage.propTypes=Page.propTypes;
 export default NavPage;

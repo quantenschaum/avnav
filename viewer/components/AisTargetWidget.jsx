@@ -9,6 +9,7 @@ import PropertyHandler from '../util/propertyhandler.js';
 import AisFormatter from '../nav/aisformatter.jsx';
 import {WidgetFrame, WidgetProps} from "./WidgetBase";
 import {useStringsChanged} from "../hoc/Resizable";
+import {setav} from "../util/helper";
 
 const AisFullDisplay=(display)=> {
     return <React.Fragment>
@@ -94,8 +95,8 @@ const AisSmallDisplay=(display)=> {
 }
 const AisTargetWidget = (props) => {
     const click = (ev) => {
-        if (ev.stopPropagation) ev.stopPropagation();
-        props.onClick({...props, mmsi: props.target ? props.target.mmsi : undefined});
+        if (ev && ev.stopPropagation) ev.stopPropagation();
+        props.onClick(setav(ev,{mmsi:props.target ? props.target.mmsi : undefined}));
     }
     let target = props.target || {};
     let small = (props.mode === "horizontal");

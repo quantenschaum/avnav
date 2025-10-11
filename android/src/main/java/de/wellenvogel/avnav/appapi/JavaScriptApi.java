@@ -14,7 +14,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-import de.wellenvogel.avnav.fileprovider.UserFileProvider;
 import de.wellenvogel.avnav.main.Constants;
 import de.wellenvogel.avnav.main.MainActivity;
 import de.wellenvogel.avnav.main.R;
@@ -25,6 +24,10 @@ import de.wellenvogel.avnav.util.AvnUtil;
 //so we have to be careful to always access the correct resource manager when accessing resources!
 //to make this visible we pass a resource manager to functions called from here that open dialogs
 public class JavaScriptApi {
+    private RequestHandler getRequestHandler() {
+        return mainActivity.getRequestHandler();
+    }
+
     private class ChannelSocket implements IWebSocket{
         private String url;
         private IWebSocketHandler handler;
@@ -107,15 +110,13 @@ public class JavaScriptApi {
         }
     }
     private UploadData uploadData=null;
-    private RequestHandler requestHandler;
     private MainActivity mainActivity;
     private boolean detached=false;
     final HashMap<Integer,ChannelSocket> sockets=new HashMap<>();
     private int getNextSocketId(){
         return WebSocket.getNextId();
     }
-    public JavaScriptApi(MainActivity mainActivity, RequestHandler requestHandler) {
-        this.requestHandler = requestHandler;
+    public JavaScriptApi(MainActivity mainActivity) {
         this.mainActivity = mainActivity;
     }
 
@@ -144,41 +145,6 @@ public class JavaScriptApi {
         return o.toString();
     }
 
-    @JavascriptInterface
-    public boolean downloadFile(String name, String type,String url) {
-        if (detached) return false;
-        if (requestHandler.typeDirs.get(type) == null) {
-            AvnLog.e("invalid type " + type + " for sendFile");
-            return false;
-        }
-        Uri data = null;
-        if (type.equals("layout")) {
-            data = LayoutHandler.getUriForLayout(url);
-        } else if (type.equals("settings")){
-            data= SettingsHandler.getUriForSettings(url);
-        } else {
-            try {
-                data = UserFileProvider.createContentUri(type, name,url);
-            } catch (Exception e) {
-                AvnLog.e("unable to create content uri for " + name,e);
-            }
-        }
-        if (data == null) return false;
-        Intent shareIntent = new Intent();
-        shareIntent.setAction(Intent.ACTION_SEND);
-        shareIntent.putExtra(Intent.EXTRA_STREAM, data);
-        shareIntent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        shareIntent.setType("application/octet-stream");
-        if (type.equals("layout")) {
-            shareIntent.setType("application/json");
-        }
-        if (type.equals("route") || type.equals("track")) {
-            shareIntent.setType("application/gpx+xml");
-        }
-        String title = mainActivity.getText(R.string.selectApp) + " " + name;
-        mainActivity.startActivity(Intent.createChooser(shareIntent, title));
-        return true;
-    }
 
     /**
      * replacement for the missing ability to intercept post requests
@@ -192,7 +158,10 @@ public class JavaScriptApi {
     public String handleUpload(String url,String data){
         if (detached) return null;
         try {
-            RequestHandler.NavResponse rt= requestHandler.handleNavRequestInternal(Uri.parse(url),new PostVars(data),null);
+            RequestHandler.NavResponse rt= getRequestHandler().handleNavRequestInternal(Uri.parse(url),new PostVars(data),null);
+            if (rt == null){
+                return RequestHandler.getErrorReturn("no data for"+url).toString();
+            }
             if (! rt.isJson()){
                 return RequestHandler.getErrorReturn("invalid post request").toString();
             }
@@ -236,7 +205,7 @@ public class JavaScriptApi {
             return false;
         }
         if (uploadData != null) uploadData.interruptCopy(true);
-        uploadData=new UploadData(mainActivity, requestHandler.getHandler(type),id,readFile);
+        uploadData=new UploadData(mainActivity, getRequestHandler().getHandler(type),id,readFile);
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("*/*");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -291,7 +260,7 @@ public class JavaScriptApi {
     }
 
     @JavascriptInterface
-    public boolean interruptCopy(int id){
+    public boolean interruptCopy(long id){
         if (uploadData==null || ! uploadData.isReady(id)) return false;
         return uploadData.interruptCopy(false);
     }
@@ -300,10 +269,10 @@ public class JavaScriptApi {
     @JavascriptInterface
     public String setLeg(String legData){
         if (detached) return null;
-        if (requestHandler.getRouteHandler() == null) return returnStatus("not initialized");
+        if (getRequestHandler().getRouteHandler() == null) return returnStatus("not initialized");
         try {
-            requestHandler.getRouteHandler().setLeg(legData);
-            requestHandler.getGpsService().timerAction();
+            getRequestHandler().getRouteHandler().setLeg(legData);
+            getRequestHandler().getGpsService().timerAction();
             return returnStatus("OK");
         } catch (Exception e) {
             AvnLog.i("unable to save leg "+e.getLocalizedMessage());
@@ -314,10 +283,10 @@ public class JavaScriptApi {
     @JavascriptInterface
     public String unsetLeg(){
         if (detached) return null;
-        if (requestHandler.getRouteHandler() == null) return returnStatus("not initialized");
+        if (getRequestHandler().getRouteHandler() == null) return returnStatus("not initialized");
         try {
-            requestHandler.getRouteHandler().unsetLeg();
-            requestHandler.getGpsService().timerAction();
+            getRequestHandler().getRouteHandler().unsetLeg();
+            getRequestHandler().getGpsService().timerAction();
             return returnStatus("OK");
         } catch (Exception e) {
             AvnLog.i("unable to unset leg "+e.getLocalizedMessage());
@@ -348,7 +317,7 @@ public class JavaScriptApi {
     @JavascriptInterface
     public void applicationStarted(){
         if (detached) return;
-        requestHandler.getSharedPreferences().edit().putBoolean(Constants.WAITSTART,false).commit();
+        getRequestHandler().getSharedPreferences().edit().putBoolean(Constants.WAITSTART,false).commit();
     }
     @JavascriptInterface
     public void externalLink(String url){
@@ -400,7 +369,7 @@ public class JavaScriptApi {
 
     @JavascriptInterface
     public int channelOpen(String url){
-        IWebSocketHandler handler=requestHandler.getWebSocketHandler(url);
+        IWebSocketHandler handler= getRequestHandler().getWebSocketHandler(url);
         if (handler == null) return -1;
         ChannelSocket socket=new ChannelSocket(url,handler,getNextSocketId());
         synchronized (sockets){

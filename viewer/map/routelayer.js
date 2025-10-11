@@ -89,9 +89,6 @@ const RouteLayer=function(mapholder){
      * @type {boolean}
      */
     this.visible=globalStore.getData(keys.properties.layers.nav);
-    let self=this;
-
-
     /**
      * the pixel coordinates of the route points from the last draw
      * @private
@@ -130,21 +127,19 @@ const RouteLayer=function(mapholder){
     this.textStyle={};
     this.dashedStyle={};
     this.setStyle();
-    this.navChangedCb=new Callback((keys)=>{
-       self.mapholder.triggerRender();
-    });
     let navStoreKeys=[keys.nav.gps.position,keys.nav.gps.valid];
     navStoreKeys=navStoreKeys.concat(
         KeyHelper.flattenedKeys(activeRoute.getStoreKeys()),
         KeyHelper.flattenedKeys(editingRoute.getStoreKeys())
     );
-    globalStore.register(this.navChangedCb,navStoreKeys);
+    globalStore.register(()=>this.mapholder.triggerRender(),navStoreKeys);
     globalStore.register(this,keys.gui.global.propertySequence);
     this.routeDisplay=new RouteDisplay(this.mapholder);
+    this.currentCourse=new RouteDisplay(this.mapholder);
     globalStore.register(()=>{
         this.routeDisplay.reset();
+        this.currentCourse.reset();
     },activeRoute.getStoreKeys(editingRoute.getStoreKeys({seq: keys.gui.global.propertySequence,rl:keys.nav.routeHandler.useRhumbLine})));
-    this.currentCourse=new RouteDisplay(this.mapholder);
     globalStore.register(()=>{
         this.currentCourse.reset();
     },activeRoute.getStoreKeys({lat:keys.nav.gps.lat,lon:keys.nav.gps.lon,
@@ -229,6 +224,8 @@ RouteLayer.prototype.showEditingRoute=function(on){
     let old=this._displayEditing;
     this._displayEditing=on;
     if (on != old){
+        this.routeDisplay.reset();
+        this.currentCourse.reset();
         this.mapholder.triggerRender();
     }
 };
@@ -243,10 +240,11 @@ RouteLayer.prototype.onPostCompose=function(center,drawing) {
     this.wpPixel=[];
     if (!this.visible) return;
     let currentEditor=this._displayEditing?editingRoute:activeRoute;
+    let showingActive= ! this._displayEditing || currentEditor.getRouteName() === activeRoute.getRouteName();
     let gpsPosition=globalStore.getData(keys.nav.gps.position);
     let gpsValid=globalStore.getData(keys.nav.gps.valid);
-    let toPoint=activeRoute.getCurrentTarget();
-    let fromPoint=activeRoute.getCurrentFrom();
+    let toPoint=showingActive?activeRoute.getCurrentTarget():undefined;
+    let fromPoint=showingActive?activeRoute.getCurrentFrom():undefined;
     let showBoat=globalStore.getData(keys.properties.layers.boat);
     let showNav=globalStore.getData(keys.properties.layers.nav);
     let wpSize=globalStore.getData(keys.properties.routeWpSize);
@@ -317,14 +315,14 @@ RouteLayer.prototype.findTarget=function(pixel){
     let tolerance=globalStore.getData(keys.properties.clickTolerance)/2;
     let currentEditor=this._displayEditing?editingRoute:activeRoute;
     if (this.routePixel) {
-        let idx = this.mapholder.findTarget(pixel, this.routePixel, tolerance);
-        if (idx >= 0) {
-            return currentEditor.getPointAt(idx);
+        let idx = this.mapholder.findTargets(pixel, this.routePixel, tolerance);
+        if (idx.length > 0) {
+            return currentEditor.getPointAt(idx[0]);
         }
     }
     if (this.wpPixel) {
-        let idx = this.mapholder.findTarget(pixel, this.wpPixel, tolerance);
-        if (idx == 0) {
+        let idx = this.mapholder.findTargets(pixel, this.wpPixel, tolerance);
+        if (idx.length> 0) {
             return currentEditor.getCurrentTarget();
         }
     }

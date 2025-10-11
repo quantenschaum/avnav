@@ -2,17 +2,17 @@
  * Created by andreas on 02.05.14.
  */
 
-import Dynamic, {useStore, useStoreState} from '../hoc/Dynamic.jsx';
+import {useStoreState} from '../hoc/Dynamic.jsx';
 import ItemList from '../components/ItemList.jsx';
 import globalStore from '../util/globalstore.jsx';
 import keys from '../util/keys.jsx';
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef} from 'react';
 import PropTypes from 'prop-types';
 import Page, {PageFrame, PageLeft} from '../components/Page.jsx';
 import MapHolder from '../map/mapholder.js';
 import GuiHelpers from '../util/GuiHelpers.js';
 import WidgetFactory from '../components/WidgetFactory.jsx';
-import EditWidgetDialog, {EditWidgetDialogWithFunc} from '../components/EditWidgetDialog.jsx';
+import {EditWidgetDialogWithFunc} from '../components/EditWidgetDialog.jsx';
 import EditPageDialog from '../components/EditPageDialog.jsx';
 import LayoutFinishedDialog from '../components/LayoutFinishedDialog.jsx';
 import LayoutHandler from '../util/layouthandler.js';
@@ -23,9 +23,10 @@ import FullScreen from '../components/Fullscreen';
 import remotechannel, {COMMANDS} from "../util/remotechannel";
 import RemoteChannelDialog from "../components/RemoteChannelDialog";
 import {DynamicTitleIcons} from "../components/TitleIcons";
-import Dialogs, {showDialog} from "../components/OverlayDialog";
+import {showDialog} from "../components/OverlayDialog";
 import {AisInfoWithFunctions} from "../components/AisInfoDisplay";
 import ButtonList from "../components/ButtonList";
+import {injectav} from "../util/helper";
 const MINPAGE=1;
 const MAXPAGE=5;
 const PANEL_LIST=['left','m1','m2','m3','right'];
@@ -34,10 +35,14 @@ function resizeFont() {
     GuiHelpers.resizeByQuerySelector('#gpspage .resize');
 }
 const widgetCreator=(widget,weightSum)=>{
+    if (! widget) return ()=>null;
     let {weight,...widgetProps}=widget;
     if (weight === undefined) weight=1;
     let height=weight/weightSum*100;
-    return WidgetFactory.createWidget(widget,{style:{height:height+"%"},mode:'gps'});
+    const Widget=WidgetFactory.createWidget(widgetProps,{mode:'gps'});
+    return (props)=><div className={'widgetWeight'} style={{height:height+"%"}}>
+        <Widget {...props}/>
+    </div>
 };
 
 const getLayoutPage=(pageNum)=>{
@@ -201,7 +206,10 @@ const GpsPage = (props) => {
                 }
             }
         ]);
-    const onItemClick = useCallback((item, data, panelInfo) => {
+    const onItemClick = useCallback((ev, panelInfo) => {
+        const avev=injectav(ev);
+        const item=avev.avnav.item;
+        if (! item) return;
         if (LayoutHandler.isEditing()) {
             showDialog(dialogCtxRef, () => <EditWidgetDialogWithFunc
                 widgetItem={item}
@@ -216,15 +224,11 @@ const GpsPage = (props) => {
             return;
         }
         if (item && item.name === "AisTarget") {
-            let mmsi = (data && data.mmsi) ? data.mmsi : item.mmsi;
+            let mmsi = avev.avnav.mmsi;
             if (mmsi === undefined) return;
             showDialog(dialogCtxRef, () => {
                 return <AisInfoWithFunctions
                     mmsi={mmsi}
-                    hidden={{
-                        AisNearest: true,
-                        AisInfoLocate: true,
-                    }}
                     actionCb={(action, m) => {
                         if (action === 'AisInfoList') {
                             props.history.push('aispage', {mmsi: m});
@@ -271,8 +275,8 @@ const GpsPage = (props) => {
             },
             itemList: panelData.list,
             fontSize: fontSize,
-            onItemClick: (item, data) => {
-                onItemClick(item, data, panelData);
+            onItemClick: (ev) => {
+                onItemClick(ev, panelData);
             },
             onClick: () => {
                 if (LayoutHandler.isEditing()) {

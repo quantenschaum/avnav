@@ -37,10 +37,11 @@ import globalstore from "../util/globalstore";
 import keys from "../util/keys";
 import navobjects from "../nav/navobjects";
 import NavCompute from "../nav/navcompute";
-import {getRouteStyles} from "./routelayer";
 import routeobjects from "../nav/routeobjects";
 import {getClosestRoutePoint} from "../nav/routeeditor";
 import Mapholder from "./mapholder";
+import {OverlayFeatureInfo, RouteFeatureInfo, TrackFeatureInfo} from "./featureInfo";
+import {getRouteStyles} from "./routelayer";
 
 export const stylePrefix="style."; // the prefix for style attributes
 
@@ -71,6 +72,16 @@ class OwnGpx extends olGPXFormat{
                 rt.push(feature);
             }
         }
+        let tracks=node.ownerDocument.getElementsByTagName('trk');
+        for (let i=0;i<tracks.length;i++){
+            let trkel=tracks[i];
+            trkel.parentNode.removeChild(trkel);
+            const feature=super.readFeatureFromNode(trkel,opt_options);
+            if (feature){
+                feature.set('track',true);
+                rt.push(feature);
+            }
+        }
         let of=super.readFeaturesFromNode(node, opt_options);
         return rt.concat(of);
     }
@@ -84,10 +95,11 @@ const getRoutePointName=(feature,idx)=>{
 }
 
 const getSupportedStyleParameters=(isRoute)=>{
+    const routeStyles=getRouteStyles();
     return [
         editableOverlayParameters.lineWidth.clone({default:globalstore.getData(isRoute?keys.properties.routeWidth:keys.properties.trackWidth)}),
-        editableOverlayParameters.lineColor.clone({efault:globalstore.getData(isRoute?keys.properties.routeColor:keys.properties.trackColor)}),
-        editableOverlayParameters.fillColor.clone({default:isRoute?globalstore.getData(keys.properties.routeColor):'rgba(255,255,0,0.4)'}),
+        editableOverlayParameters.lineColor.clone({default:globalstore.getData(isRoute?keys.properties.routeColor:keys.properties.trackColor)}),
+        editableOverlayParameters.fillColor.clone({default:isRoute?routeStyles.normalWpStyle.color:'rgba(255,255,0,0.4)'}),
         editableOverlayParameters.strokeWidth.clone({default:0}),
         editableOverlayParameters.strokeColor.clone({default:globalstore.getData(isRoute?keys.properties.routeColor:keys.properties.trackColor) }),
         editableOverlayParameters.circleWidth.clone({default:globalstore.getData(keys.properties.routeWpSize) }),
@@ -164,7 +176,8 @@ class GpxChartSource extends ChartSourceBase{
                             this.styleParameters[editableOverlayParameters.strokeColor]:this.COLOR_INVISIBLE,
                         width: this.styleParameters[editableOverlayParameters.strokeWidth],
                     })
-                })
+                }),
+                text: this.styleParameters[editableOverlayParameters.showText]?textStyle:undefined
             }),
             LineString: new olStyle({
                 stroke: new olStroke({
@@ -218,8 +231,19 @@ class GpxChartSource extends ChartSourceBase{
             const scale=this.getScale();
             const image=rt.getImage();
             if (image) image.setScale(scale);
-            const textStyle=rt.getText();
-            if (textStyle) textStyle.setScale(scale);
+            let textStyle=rt.getText();
+            if (textStyle) {
+                textStyle = textStyle.clone();
+                textStyle.setScale(scale);
+                const txt = feature.get('name') || feature.get('desc')||feature.get('description');
+                if (txt) {
+                    textStyle.setText(txt);
+                }
+                else{
+                    textStyle.setText('');
+                }
+                rt.setText(textStyle);
+            }
             return rt;
         }
         if (type === 'LineString'){
@@ -240,24 +264,27 @@ class GpxChartSource extends ChartSourceBase{
             return styles;
         }
         if (type === 'MultiLineString'){
-            //route
+            //route or track
             let geometry=feature.getGeometry();
+            const route=feature.get('route');
             let styles=[this.styles[type]];
-            let isFirst=true;
-            let lineStrings=geometry.getLineStrings();
-            let ptIdx=0;
-            lineStrings.forEach((lineString)=>{
-                let coordinates=lineString.getCoordinates();
-                if (coordinates.length > 1) {
-                    if (isFirst) {
-                        styles.push(this.getRoutePointStyle(coordinates[0],getRoutePointName(feature,ptIdx)));
-                        isFirst = false;
+            if (route) {
+                let isFirst = true;
+                let lineStrings = geometry.getLineStrings();
+                let ptIdx = 0;
+                lineStrings.forEach((lineString) => {
+                    let coordinates = lineString.getCoordinates();
+                    if (coordinates.length > 1) {
+                        if (isFirst) {
+                            styles.push(this.getRoutePointStyle(coordinates[0], getRoutePointName(feature, ptIdx)));
+                            isFirst = false;
+                            ptIdx++;
+                        }
+                        styles.push(this.getRoutePointStyle(coordinates[coordinates.length - 1], getRoutePointName(feature, ptIdx)));
                         ptIdx++;
                     }
-                    styles.push(this.getRoutePointStyle(coordinates[coordinates.length-1],getRoutePointName(feature,ptIdx)));
-                    ptIdx++;
-                }
-            })
+                })
+            }
             return styles;
         }
         return this.styles[feature.getGeometry().getType()];
@@ -327,6 +354,7 @@ class GpxChartSource extends ChartSourceBase{
                             this.source.addFeatures(
                                 features
                             );
+                            this.buildStyles();
                         })
                         .catch((error) => {
                             //vectorSource.removeLoadedExtent(extent);
@@ -347,45 +375,53 @@ class GpxChartSource extends ChartSourceBase{
         });
     }
     featureToInfo(feature,pixel){
-        let rt={
-            overlayName:this.chartEntry.name,
-            overlayType:this.chartEntry.type,
-            overlayUrl: this.chartEntry.url,
-            overlaySource: this
-        };
         if (! feature) {
-            return rt;
+            return;
         }
-
+        let rt;
+        const ot=(this.chartEntry||{}).type;
+        const oname=this.getName();
+        const fname=feature.get('name');
+        const url=this.getUrl();
+        if (ot==='track'){
+            rt=new TrackFeatureInfo({title:oname,isOverlay:true,urlOrKey:oname});
+        }
+        else if (ot === 'route'){
+            rt=new RouteFeatureInfo({isOverlay:true,routeName:fname,title:oname})
+        }
+        else{
+            rt=new OverlayFeatureInfo({title: oname,urlOrKey:url});
+        }
+        rt.overlaySource=this;
         let geometry=feature.getGeometry();
         let coordinates;
         if (geometry instanceof olPoint){
-            rt.kind='point';
             coordinates=this.mapholder.fromMapToPoint(geometry.getCoordinates());
-            rt.nextTarget=coordinates;
-            const fn=feature.get('name');
-            if (fn !== undefined) rt.nextTarget.name=fn;
+            rt.point=coordinates;
+            if (fname) rt.point.name=fname;
+
         }
         else{
             if (geometry){
                 coordinates=this.mapholder.fromMapToPoint(geometry.getClosestPoint(this.mapholder.pixelToCoord(pixel)));
-                if (this.isRoute){
-                    const route=feature.get('route');
-                    if (route){
-                        rt.routeName=route.name;
+                const route=feature.get('route')
+                if (route && route instanceof routeobjects.Route){
                         const routePoint=getClosestRoutePoint(route,coordinates);
-                        if (routePoint) coordinates=routePoint;
-                    }
+                        if (routePoint) rt.point=routePoint;
                 }
-                rt.nextTarget=coordinates;
+                else{
+                    rt.point=coordinates;
+                }
             }
             else {
-                coordinates = this.mapholder.fromMapToPoint(this.mapholder.pixelToCoord(pixel));
+                rt.point = this.mapholder.fromMapToPoint(this.mapholder.pixelToCoord(pixel));
             }
         }
+        const userInfo={};
         let infoItems=['desc','name','sym','time','height','link','linkText'];
-        infoItems.forEach((item)=>rt[item]=feature.get(item));
-        this.formatFeatureInfo(this.styleParameters[editableOverlayParameters.featureFormatter], rt,feature,coordinates,true);
+        infoItems.forEach((item)=>userInfo[item]=feature.get(item));
+        this.formatFeatureInfo(this.styleParameters[editableOverlayParameters.featureFormatter], userInfo,feature,coordinates,true);
+        rt.userInfo=userInfo;
         return rt;
     }
 

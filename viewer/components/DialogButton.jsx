@@ -10,11 +10,7 @@ const COMPONENT="dialogButton";
 const DialogButton=(props)=>{
         const dialogContext=useDialogContext();
         KeyHandler.registerDialogComponent(COMPONENT);
-        useKeyEventHandlerPlain(props.name,COMPONENT,()=>{
-            if (props.onClick && ! props.disabled && props.visible !== false) props.onClick();
-        });
-        let {icon,style,disabled,visible,name,className,toggle,children,onClick,close,...forward}=useStore(props);
-        if (visible === false) return null;
+        let {icon,style,disabled,visible,name,className,toggle,children,onClick,close,onPreClose,...forward}=useStore(props);
         let spanStyle={};
         if (icon !== undefined) {
             spanStyle.backgroundImage = "url(" + icon + ")";
@@ -24,16 +20,27 @@ const DialogButton=(props)=>{
             add.disabled = true;
         }
         if (close === undefined) close=true;
+        const clickHandler=(ev)=>{
+            if (! onClick || close) {
+                let closeDialog=true;
+                if (onPreClose) {
+                    if (! onPreClose(ev,dialogContext)) closeDialog=false;
+                }
+                if (closeDialog) dialogContext.closeDialog();
+            }
+            if (onClick) onClick(ev,dialogContext);
+        };
+        useKeyEventHandlerPlain(props.name,COMPONENT,()=>{
+            if ( ! disabled && visible !== false) clickHandler({});
+        });
+        if (visible === false) return null;
         return (
             <button
                 {...forward}
                 {...add}
                 {...style}
                 name={name}
-                onClick={(ev)=>{
-                    if (! onClick || close) dialogContext.closeDialog();
-                    if (onClick) onClick(ev);
-                }}
+                onClick={clickHandler}
                 className={concatsp("dialogButton",name,(icon !== undefined)?"icon":undefined,toggle?"active":"inactive",className)}
             >
             <span style={spanStyle}/>
@@ -44,6 +51,7 @@ const DialogButton=(props)=>{
 
 DialogButton.propTypes={
     onClick: PropTypes.func,
+    onPreClose: PropTypes.func,
     className: PropTypes.string,
     name: PropTypes.string.isRequired,
     icon: PropTypes.string,

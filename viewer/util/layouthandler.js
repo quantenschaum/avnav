@@ -471,7 +471,9 @@ class LayoutHandler{
         let tryList=this.getPanelTryList(basename,options);
         for (let i=0;i<tryList.length;i++){
             let list=this.getDirectPanelData(page,tryList[i]);
-            if (list) return {name:tryList[i],list:list};
+            if (list) {
+                return {name:tryList[i],list:list};
+            }
         }
         return {name:basename};
     }
@@ -637,7 +639,7 @@ class LayoutHandler{
     }
 
     moveItem(pageWithOptions,panel,oldIndex,newIndex,opt_newPanel){
-        console.log("moveItem",pageWithOptions,panel,oldIndex,newIndex,opt_newPanel);
+        base.log("moveItem",pageWithOptions,panel,oldIndex,newIndex,opt_newPanel);
         if (oldIndex == newIndex && (opt_newPanel === undefined || panel === opt_newPanel)) return true;
         if (! this.isEditing()) return false;
         const page=getPagename(pageWithOptions);
@@ -863,4 +865,5 @@ LayoutHandler.prototype.ADD_MODES={
     beforeIndex: 3,
     afterIndex: 4
 };
+
 export default  new LayoutHandler();

@@ -392,17 +392,20 @@ class AVNHTTPHandler(HTTPWebSocketsHandler):
       for entry in rt:
         try:
           fentry=entry
-          mdist=AVNUtil.distance((fentry.get('lat'),fentry.get('lon')), dest)
+          tlon=fentry.get('lon')
+          tlat=fentry.get('lat')
+          if tlon is None or tlat is None:
+            continue
+          mdist=AVNUtil.distance((tlat,tlon), dest)
           inRange=False
           if mdist<=dist:
             inRange=True
           else:
             if dest1 is not None:
-              mdist=AVNUtil.distance((fentry.get('lat'),fentry.get('lon')), dest1)
+              mdist=AVNUtil.distance((tlat,tlon), dest1)
               if mdist<=dist:
                 inRange=True
           if inRange:
-            fentry['distance']=mdist*AVNUtil.NM #have this in m
             frt.append(fentry)
           else:
             AVNLog.debug("filtering out %s due to distance %f",str(fentry['mmsi']),mdist)

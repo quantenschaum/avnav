@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 # vim: ts=2 sw=2 et ai
 ###############################################################################
@@ -24,6 +25,7 @@
 #  parts from this software (AIS decoding) are taken from the gpsd project
 #  so refer to this BSD licencse also (see ais.py) or omit ais.py
 ###############################################################################
+import os
 
 from avnav_store import *
 hasAisDecoder=False
@@ -50,6 +52,62 @@ class Key(object):
     self.signalKConversion=signalKConversion
   def getKey(self):
     return AVNStore.BASE_KEY_GPS+"."+self.key
+
+class Sat:
+  def __init__(self,nr,talker):
+    self.nr=nr
+    self.talker=talker
+    self.ts=time.monotonic()
+  def valid(self,validTime):
+    return self.ts >= validTime
+  def update(self,talker=None):
+    if talker is not None:
+      self.talker=talker
+    self.ts=time.monotonic()
+
+
+class SatList:
+  def __init__(self,expiryTime):
+    self.lock=threading.Lock()
+    self.store={}
+    self.usedStore={}
+    self.expiryTime=expiryTime
+  def cleanup(self,used=None):
+    validTime=time.monotonic()-self.expiryTime
+    with self.lock:
+      if used is None or used == False:
+        self.store={k:self.store[k] for k in self.store if self.store[k].valid(validTime)}
+      if used is None or used:
+        self.usedStore={k:self.usedStore[k] for k in self.usedStore if self.usedStore[k].valid(validTime)}
+  def add(self,numbers,talker,used=False):
+    if type(numbers) is not list:
+      numbers=[numbers]
+    store=self.store if not used else self.usedStore
+    num=0
+    with self.lock:
+      for number in numbers:
+        if number:
+          number=int(number)
+          existing=store.get(number)
+          if existing is None:
+            existing=Sat(number,talker)
+            store[number]=existing
+          existing.update(talker)
+          num+=1
+    self.cleanup(used)
+    return num
+  def getUsed(self):
+    validTime=time.monotonic()-self.expiryTime
+    with self.lock:
+      return sum(1 for k,v in self.usedStore.items() if v.valid(validTime))
+  def getNum(self):
+    validTime=time.monotonic()-self.expiryTime
+    with self.lock:
+      return sum(1 for k,v in self.store.items() if v.valid(validTime))
+
+
+
+
 
 class NMEAParser(object):
   DEFAULT_SOURCE_PRIORITY=50
@@ -128,6 +186,8 @@ class NMEAParser(object):
   def __init__(self,navdata):
     self.payloads = {'A':'', 'B':''}    #AIS paylod data
     self.navdata=navdata # type: AVNStore
+    self.satStore={}
+    self.lock=threading.Lock()
   @classmethod
   def formatTime(cls,ts):
     t = ts.isoformat()
@@ -138,6 +198,13 @@ class NMEAParser(object):
       t += "Z"
     return t
   #------------------ some nmea data specific methods -------------------
+  def _getSatStore(self,source):
+    with self.lock:
+      st=self.satStore.get(source)
+      if st is None:
+        st=SatList(self.navdata.getExpiryPeriod())
+        self.satStore[source]=st
+      return st
 
 
   def addToNavData(self,data,record=None,source='internal',priority=0,timestamp=None):
@@ -308,6 +375,7 @@ class NMEAParser(object):
       return self.ais_packet_scanner(data,source=source,sourcePriority=sourcePriority,timestamp=timestamp)
 
     tag=darray[0][3:]
+    talker=darray[0][1:3]
     rt={}
     #currently we only take the time from RMC
     #as only with this one we have really a valid complete timestamp
@@ -317,20 +385,26 @@ class NMEAParser(object):
         if mode >= 1 and all(darray[i] for i in (2,3,4,5)):
           rt[self.K_LAT.key]=self.nmeaPosToFloat(darray[2],darray[3])
           rt[self.K_LON.key]=self.nmeaPosToFloat(darray[4],darray[5])
-        if darray[7]:
-          rt[self.K_SATUSED.key]=int(darray[7])
-        self.addToNavData(rt,source=source,record=tag,timestamp=timestamp)
+        self.addToNavData(rt,source=source,record=tag,timestamp=timestamp,priority=basePriority)
         return True
       if tag == 'GSA':
-        numUsed=sum(1 for i in range(3,15) if darray[i])
-        rt[self.K_SATUSED.key]=numUsed
-        self.addToNavData(rt,source=source,record=tag,timestamp=timestamp)
+        store=self._getSatStore(source)
+        an=store.add(darray[3:15],talker,True)
+        used=store.getUsed()
+        AVNLog.debug("GSA: added %d used %d",an,used)
+        rt[self.K_SATUSED.key]=used
+        self.addToNavData(rt,source=source,record=tag,timestamp=timestamp,priority=basePriority)
         return True
       if tag=='GSV':
-        if darray[3]:
-          rt[self.K_SATVIEW.key]=int(darray[3])
-        else:
-          return False
+        store=self._getSatStore(source)
+        start=4
+        numbers=[]
+        while start < len(darray):
+          if darray[start]:
+            numbers.append(darray[start])
+          start+=4
+        store.add(numbers,talker,False)
+        rt[self.K_SATVIEW.key]=store.getNum()
         self.addToNavData(rt,source=source,record=tag,priority=basePriority,timestamp=timestamp)
         return True
       if tag=='GLL':
@@ -646,7 +720,7 @@ class NMEAParser(object):
       AVNLog.ld("empty position in %s",str(data))
       return False
     except Exception as e:
-      AVNLog.info(" error parsing nmea data " + str(data) + "\n" + traceback.format_exc())
+      AVNLog.info(" error parsing nmea data %s:%s", str(data),traceback.format_exc())
 
   @classmethod
   def convertXdrValue(self, value, unit):
@@ -688,13 +762,20 @@ class NMEAParser(object):
     try:
         expect = fields[1]
         fragment = fields[2]
+        messageid= fields[3]
         channel = fields[4]
+        key=f"{channel}-{messageid}"
         if fragment == '1':
-          cpl=self.payloads.get(channel)
-          if cpl is not None and cpl != '':
+          cpl=self.payloads.get(key)
+          if cpl is not None:
             AVNLog.debug('channel %s still open with %s',channel,self.payloads[channel])
-          self.payloads[channel] = ''
-        self.payloads[channel] += fields[5]
+          self.payloads[key] = fields[5]
+        else:
+            if self.payloads.get(key) is None:
+                AVNLog.error('invalid multi part ais message, missing #1: %s',line)
+                return False
+            else:
+                self.payloads[key] += fields[5]
         try:
             # This works because a mangled pad literal means
             # a malformed packet that will be caught by the CRC check.
@@ -716,9 +797,12 @@ class NMEAParser(object):
         AVNLog.debug("fragments now complete on channel %s with number %s: %s", channel, fragment,line.strip())
     # Render assembled payload to packed bytes
     bits = ais.BitVector()
-    bits.from_sixbit(self.payloads[channel], pad)
-    rt=self.parse_ais_messages(self.payloads[channel], bits,source=source,priority=basePriority,timestamp=timestamp)
-    self.payloads[channel]=''
+    bits.from_sixbit(self.payloads[key], pad)
+    rt=self.parse_ais_messages(self.payloads[key], bits,source=source,priority=basePriority,timestamp=timestamp)
+    try:
+        del self.payloads[key]
+    except:
+        pass
     return rt
 
 
@@ -749,14 +833,16 @@ class NMEAParser(object):
               else:
                   expected_range = expected
               actual = values['length']
-              if not (actual >= expected_range[0] and actual <= expected_range[1]):
+              if not (actual >= expected_range[0]):
                   raise Exception("invalid length %d(%d..%d)"%(actual,expected_range[0],expected_range[1]))
+              if not ( actual <= expected_range[1]):
+                AVNLog.debug("AIS message type %s to long, expected %d, got %d",str(values['msgtype']),expected_range[1],actual)
           # We're done, hand back a decoding
           #AVNLog.ld('decoded AIS data',cooked)
           self.storeAISdata(cooked,source=source,priority=priority,timestamp=timestamp)
           return True
       except:
-          AVNLog.debug("exception %s while decoding AIS data %s",traceback.format_exc())
+          AVNLog.debug("exception while decoding AIS data %s:%s",raw,traceback.format_exc())
           return False
 
   def storeAISdata(self,bitfield,source='internal',priority=0,timestamp=None):
@@ -785,3 +871,66 @@ def to360(a):
 def to180(a):
   "limit a to [-180,+180)"
   return to360(a + 180) - 180
+
+
+if __name__ == '__main__':
+    def usage():
+        print(f"usage: {sys.argv[0]} infile",file=sys.stderr)
+        sys.exit(1)
+    if len(sys.argv) < 2:
+        usage()
+    infile=sys.argv[1]
+    if infile != "-" and not os.path.isfile(infile):
+        print(f"no such file: {infile}",file=sys.stderr)
+        sys.exit(1)
+    logfile=os.path.join('/tmp',f"parsertest{os.getpid()}.log")
+    print(f"logging to {logfile}",file=sys.stderr)
+    AVNLog.initLoggingSecond(logging.DEBUG,logfile,consoleOff=False,debugToFile=False)
+    class MyNavData:
+        def __init__(self):
+            self.aisstat={}
+
+        def getExpiryPeriod(self):
+            return 3000
+        def setAisValue(self,mmsi, data, source='test', priority=1, timestamp=None):
+            type = data.get('type')
+            print(f"AIS mmsi={mmsi} type={type} data={data} priority={priority} timestamp={timestamp}")
+            if mmsi is None:
+                mmsi='---'
+            current=self.aisstat.get(mmsi)
+            if current is None:
+                current={}
+                self.aisstat[mmsi]=current
+            if type is None:
+                type="none"
+            count=current.get(type)
+            if count is None:
+                count=0
+            current[type]=count+1
+
+        def print_stats(self):
+            overall={}
+            print("###statistics")
+            for k,v in sorted(self.aisstat.items()):
+                values=""
+                for t,c in sorted(v.items()):
+                    values += f"{t}:{c} "
+                    oc=overall.get(t,0)
+                    overall[t]=oc+c
+                print(f"{k}: {values}")
+            print("###overall")
+            for k,v in sorted(overall.items()):
+                print(f"{k}: {v}")
+
+        def setValue(self,key, data, source='test', priority=1, record=None, timestamp=None):
+            print(f"NMEA key={key} data={data} priority={priority} record={record} timestamp={timestamp}")
+    navdata = MyNavData()
+    parser=NMEAParser(navdata)
+    with open(infile,'r') if infile != "-" else sys.stdin as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            print(line)
+            parser.parseData(line,source='test')
+    navdata.print_stats()

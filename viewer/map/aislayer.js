@@ -16,6 +16,7 @@ import atonIcon from '../images/ais-aton.png';
 import cloneDeep from 'clone-deep';
 import {CourseVector} from "../nav/aiscomputations";
 import {fillOptions} from "../nav/aisdata";
+import {AisFeatureInfo} from "./featureInfo";
 
 const DEFAULT_COLOR="#f7c204";
 
@@ -373,13 +374,27 @@ class AisLayer{
      * find the AIS target that has been clicked
      * @param {olCoordinate} pixel the css pixel from the event
      */
-    findTarget(pixel) {
+    findFeatures(pixel) {
         base.log("findAisTarget " + pixel[0] + "," + pixel[1]);
-        if (!this.pixel) return undefined;
+        if (!this.pixel) return [];
+        let firstLabel = globalStore.getData(keys.properties.aisFirstLabel, '');
         let tolerance = globalStore.getData(keys.properties.clickTolerance) / 2;
-        let idx = this.mapholder.findTarget(pixel, this.pixel, tolerance);
-        if (idx >= 0) return this.pixel[idx].ais;
-        return undefined;
+        let idxlist = this.mapholder.findTargets(pixel, this.pixel, tolerance);
+        const targetList=[];
+        const foundMmsis={};
+        idxlist.forEach((idx)=>{
+            const target=this.pixel[idx];
+            if (target && target.ais && target.ais.mmsi){
+                if (foundMmsis[target.ais.mmsi]) return;
+                foundMmsis[target.ais.mmsi]=true;
+                const featureInfo=new AisFeatureInfo({point:target.ais.receivedPos,mmsi:target.ais.mmsi});
+                featureInfo.title = AisFormatter.format(firstLabel, target.ais, true);
+                const [, symbol, ] = this.getStyleEntry(target.ais);
+                if (symbol && symbol.image) featureInfo.icon=symbol.image;
+                targetList.push(featureInfo)
+            }
+        })
+        return targetList;
     }
 
 
@@ -419,6 +434,7 @@ class AisLayer{
      * @returns {StyleEntry}
      */
     getStyleEntry(item) {
+        const WILDCARD_STATUS="-status*";
         let cl = AisFormatter.format('clazz', item);
         let typeSuffix;
         let statusSuffix;
@@ -435,7 +451,8 @@ class AisLayer{
             styleMap[base],
             (typeSuffix !== undefined) ? styleMap[base + typeSuffix] : undefined,
             (statusSuffix !== undefined) ? styleMap[base + statusSuffix] : undefined,
-            (statusSuffix !== undefined) ? styleMap[base + typeSuffix + statusSuffix] : undefined,
+            (typeSuffix !== undefined) ? styleMap[base+typeSuffix+WILDCARD_STATUS]:undefined,
+            (statusSuffix !== undefined && typeSuffix !== undefined) ? styleMap[base + typeSuffix + statusSuffix] : undefined,
         );
         let style = cloneDeep(symbol.style);
         if (!symbol.image || !style.size) {

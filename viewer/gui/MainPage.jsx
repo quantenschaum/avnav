@@ -25,6 +25,7 @@ import {RecursiveCompare} from '../util/compare';
 import LocalStorage from '../util/localStorageManager';
 import splitsupport from "../util/splitsupport";
 import LayoutHandler from "../util/layouthandler";
+import {avitem} from "../util/helper";
 
 
 const getImgSrc=function(color){
@@ -104,6 +105,8 @@ class BottomLine extends React.Component {
         }
     };
 
+const DEFAULT_QUERY_INTERVAL=3000;
+const EMPTY_QUERY_INTERVAL=500;
 
 class MainPage extends React.Component {
     constructor(props) {
@@ -113,18 +116,23 @@ class MainPage extends React.Component {
             addOns:[],
             selectedChart:0,
             sequence:0,
-            overlays:{}
+            overlays:{},
+            loading: false
         };
         this.fillList=this.fillList.bind(this);
         GuiHelper.storeHelper(this,(data)=>{
             this.readAddOns();
         },{sequence:keys.gui.global.reloadSequence},2);
         GuiHelper.storeHelper(this,(data)=>{
+            this.setState({
+                chartList:[],
+                loading: true
+            })
             this.fillList();
         },{sequence:keys.gui.global.reloadSequence});
         this.timer=GuiHelper.lifecycleTimer(this,(sequence)=>{
             this.fillList(sequence);
-        },3000,true);
+        },DEFAULT_QUERY_INTERVAL,true);
         this.selectChart(0);
         GuiHelper.keyEventHandler(this,(component,action)=>{
             if (action == "selectChart"){
@@ -150,7 +158,8 @@ class MainPage extends React.Component {
      * the click handler for the charts
      * @param entry - the chart entry
      */
-    showNavpage(entry) {
+    showNavpage(ev) {
+        const entry= avitem(ev);
         base.log("activating navpage with url " + entry.url);
         MapHolder.setChartEntry(entry);
         this.props.history.push('navpage');
@@ -227,7 +236,7 @@ class MainPage extends React.Component {
             {
                 name: 'NavOverlays',
                 onClick: ()=> {
-                    EditOverlaysDialog.createDialog(DEFAULT_OVERLAY_CHARTENTRY);
+                    EditOverlaysDialog.createDialog(DEFAULT_OVERLAY_CHARTENTRY,()=>MapHolder.setRedraw(true));
                 },
                 editDisable: true,
                 overflow: true,
@@ -280,6 +289,7 @@ class MainPage extends React.Component {
                         ev.stopPropagation();
                         EditOverlaysDialog.createDialog(props,()=>{
                             this.fillList();
+                            MapHolder.setRedraw(true);
                         });
                     }}
                 />}
@@ -333,6 +343,7 @@ class MainPage extends React.Component {
                 let lastChartKey=current?current.getChartKey():mapholder.getLastChartKey();
                 let i=0;
                 let selectedChart;
+                let isLoading= json.loading;
                 json.items.sort((a,b)=>{
                     let nameA = (a.name).toUpperCase();
                     let nameB = (b.name).toUpperCase();
@@ -378,10 +389,16 @@ class MainPage extends React.Component {
                             rt.chartList=newState.chartList;
                         }
                         if (!RecursiveCompare(state.overlays,newState.overlays)) rt.overlays=newState.overlays;
-                        if (! rt.chartList && ! rt.overlays) return null;
+                        if (state.loading !== isLoading){
+                            rt.loading=isLoading;
+                        }
+                        if (! rt.chartList && ! rt.overlays && rt.loading === undefined) return null;
                         return rt;
                     });
-                    if (sequence !== undefined) this.timer.startTimer(sequence);
+                    if (sequence !== undefined) {
+                        this.timer.setTimeout(isLoading?EMPTY_QUERY_INTERVAL:DEFAULT_QUERY_INTERVAL)
+                        this.timer.startTimer(sequence);
+                    }
                 });
             },
             (error)=>{
@@ -400,11 +417,15 @@ class MainPage extends React.Component {
 
 
     render() {
+        const Title=(props)=><React.Fragment>
+            <span>{"AvNav "+ LocalStorage.getPrefix()}</span>
+            {this.state.loading && <span className={"spinner"}/>}
+        </React.Fragment>
         return (
             <Page
                 {...this.props}
                   id="mainpage"
-                  title={"AvNav "+ LocalStorage.getPrefix()}
+                title={<Title/>}
                   mainContent={
                     <ItemList className="mainContent"
                                itemClass={this.ChartItem}

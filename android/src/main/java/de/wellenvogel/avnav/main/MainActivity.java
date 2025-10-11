@@ -1,6 +1,5 @@
 package de.wellenvogel.avnav.main;
 
-import android.Manifest;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ProgressDialog;
@@ -31,6 +30,8 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.DownloadListener;
+import android.webkit.ServiceWorkerClient;
+import android.webkit.ServiceWorkerController;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -50,7 +51,11 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Method;
+import java.text.DateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 
@@ -63,11 +68,11 @@ import de.wellenvogel.avnav.util.AvnLog;
 import de.wellenvogel.avnav.util.AvnUtil;
 import de.wellenvogel.avnav.util.DialogBuilder;
 import de.wellenvogel.avnav.worker.GpsService;
+import de.wellenvogel.avnav.worker.NeededPermissions;
 import de.wellenvogel.avnav.worker.UsbConnectionHandler;
 import de.wellenvogel.avnav.worker.WorkerFactory;
 
 import static de.wellenvogel.avnav.main.Constants.LOGPRFX;
-import static de.wellenvogel.avnav.settings.SettingsActivity.checkGpsPermission;
 import static de.wellenvogel.avnav.settings.SettingsActivity.checkSettings;
 
 
@@ -99,12 +104,12 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
     private ProgressDialog pd;
     private JavaScriptApi jsInterface;
     private int goBackSequence=0;
-    private boolean checkSettings=true;
     private boolean showsDialog = false;
 
     View dlProgress=null;
     TextView dlText=null;
     private ValueCallback<Uri[]> upload=null;
+    private boolean settingsAlreadyChecked=false;
 
 
     private class DownloadInternal extends DownloadHandler.DownloadStream{
@@ -166,6 +171,7 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
                 if (resultCode != Constants.RESULT_NO_RESTART) {
                     serviceNeedsRestart = true;
                 }
+                showsDialog=false;
                 sendEventToJs(Constants.JS_PROPERTY_CHANGE, 0); //this will some pages cause to reload...
                 break;
             case Constants.FILE_OPEN:
@@ -243,6 +249,88 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
         }
 
     };
+
+
+    public void showCrashDialog(Throwable t) {
+        AvnLog.e("crash detected",t);
+        StringWriter msg = new StringWriter();
+        PrintWriter ps = new PrintWriter(msg);
+        String date= DateFormat.getDateInstance().format(new Date());
+        ps.print("Date: ");
+        ps.println(date);
+        ps.print("Version: ");
+        ps.printf("%s %s", BuildConfig.APPLICATION_ID,BuildConfig.VERSION_CODE);
+        ps.println("");
+        ps.print("Device: ");
+        ps.printf("%s-%s", Build.MANUFACTURER,Build.MODEL);
+        ps.println("");
+        ps.print("Android: ");
+        ps.println(android.os.Build.VERSION.SDK_INT);
+        ps.print("Exception: ");
+        ps.println(t);
+        t.printStackTrace(ps);
+        ps.flush();
+        DialogBuilder builder = new DialogBuilder(this, R.layout.dialog_share);
+        builder.createDialog();
+        builder.setFontSize(R.id.question,10);
+        builder.setText(R.id.title, "AvNav Crashed");
+        builder.setText(R.id.question, msg.toString());
+        builder.setButton(R.string.ok, DialogInterface.BUTTON_POSITIVE, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                builder.dismiss();
+                mainShutdown();
+            }
+        });
+        builder.setIconButton(android.R.drawable.ic_menu_share, DialogInterface.BUTTON_NEUTRAL, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                shareIntent.setType("text/plain");
+                shareIntent.putExtra(Intent.EXTRA_TEXT, msg.toString());
+                shareIntent.putExtra(Intent.EXTRA_SUBJECT, "AvNav crash "+date);
+
+                try {
+                    startActivity(Intent.createChooser(shareIntent, "Export Crash Data"));
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Error exporting data: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+                builder.dismiss();
+                mainShutdown();
+            }
+        }).setText(R.string.share);
+        builder.show();
+
+    }
+
+    private boolean doStartGpsService(int fgType){
+        AvnLog.i(Constants.LOGPRFX, "MainActivity create GpsService");
+        bindAction = new Runnable() {
+            @Override
+            public void run() {
+                AvnLog.i(LOGPRFX,"MainActivity: Service bind action - initWebView");
+                initializeWebView();
+            }
+        };
+        try {
+            Intent intent = new Intent(this, GpsService.class);
+            intent.putExtra(Constants.SERVICE_TYPE, fgType);
+            if (Build.VERSION.SDK_INT >= 26) {
+                AvnLog.i(Constants.LOGPRFX, "MainActivity starting GpsService in foreground");
+                startForegroundService(intent);
+            } else {
+                AvnLog.i(Constants.LOGPRFX, "MainActivity starting GpsService");
+                startService(intent);
+            }
+            bindService(intent, mConnection, 0);
+            serviceNeedsRestart = false;
+            return true;
+        }catch (Throwable t){
+            showCrashDialog(t);
+        }
+        return false;
+    }
+
     private boolean startGpsService(){
         if (Build.VERSION.SDK_INT >= 26) {
             ActivityManager activityManager = (ActivityManager) this.getSystemService(Context.ACTIVITY_SERVICE);
@@ -262,34 +350,19 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
                 }
             }
         }
-        AvnLog.i(Constants.LOGPRFX, "MainActivity create GpsService");
-        bindAction = new Runnable() {
-            @Override
-            public void run() {
-                initializeWebView();
-            }
-        };
-        Intent intent = new Intent(this, GpsService.class);
-        bindService(intent,mConnection,0);
-        if (Build.VERSION.SDK_INT >= 26){
-            AvnLog.i(Constants.LOGPRFX, "MainActivity starting GpsService in foreground");
-            startForegroundService(intent);
-        }
-        else {
-            AvnLog.i(Constants.LOGPRFX, "MainActivity starting GpsService");
-            startService(intent);
-        }
-        serviceNeedsRestart=false;
-        return true;
+        NeededPermissions perm = GpsService.getNeededPermissions(activity);
+        int fgType=GpsService.computeRequiredRunningMode(perm.gps == NeededPermissions.Mode.NEEDED,this,true);
+        return doStartGpsService(fgType);
+
     }
 
 
-    private void stopGpsService(){
+    private void stopGpsService(boolean stopMe){
         AvnLog.i(LOGPRFX,"stop gps service");
         GpsService service=gpsService;
         if (service !=null){
             gpsService=null;
-            service.stopMe();
+            service.stopMe(stopMe);
         }
         Intent intent = new Intent(this, GpsService.class);
         try {
@@ -307,6 +380,7 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
 
 
     public void showSettings(boolean initial){
+        showsDialog=true;
         Intent sintent= new Intent(this,SettingsActivity.class);
         sintent.putExtra(Constants.EXTRA_INITIAL,initial);
         startActivityForResult(sintent,Constants.SETTINGS_REQUEST);
@@ -351,6 +425,21 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
         if (bindAction != null){
             bindAction.run();
             bindAction=null;
+        }
+    }
+
+    @Override
+    public void restartService() {
+        AvnLog.i(LOGPRFX,"service restart triggered");
+        if (gpsService != null){
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    AvnLog.i(LOGPRFX,"service restart executing");
+                    stopGpsService(false);
+                    startGpsService();
+                }
+            });
         }
     }
 
@@ -410,7 +499,7 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
             unbindService(mConnection);
         }catch (Exception e){}
         if (exitRequested) {
-            stopGpsService();
+            stopGpsService(true);
             //System.exit(0);
         }
         else{
@@ -443,30 +532,43 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
         nextDownload.fileName=fileName;
         startNextDownload(nextDownload,mimeType);
     }
+    private WebResourceResponse handleRequest(WebView view, String url, String method){
+        RequestHandler handler= getRequestHandler();
+        WebResourceResponse rt=null;
+        if (handler != null) {
+            try {
+                rt = handler.handleRequest(view,url,method);
+            }catch (Throwable t){
+                AvnLog.e("web request for "+url+" failed",t);
+                InputStream is=new ByteArrayInputStream(new byte[]{});
+                if (Build.VERSION.SDK_INT >= 21){
+                    return new WebResourceResponse("application/octet-stream", "UTF-8",500,"error "+t.getMessage(),new HashMap<String, String>(),is);
+                }
+                else {
+                    return null;
+                }
+            }
+        }
+        return rt;
+    }
 
     private void initializeWebView(){
         if (webView != null) return;
         AvnLog.i(LOGPRFX,"initializeWebView");
         sharedPrefs.edit().putBoolean(Constants.WAITSTART,true).commit();
-        jsInterface=new JavaScriptApi(this,getRequestHandler());
+        jsInterface=new JavaScriptApi(this);
         webView=(WebView)findViewById(R.id.webmain);
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setAllowFileAccess(true);
         webView.getSettings().setAllowFileAccess(true);
-        if (Build.VERSION.SDK_INT >= 16){
+        try {
+            WebSettings settings = webView.getSettings();
+            settings.setAllowUniversalAccessFromFileURLs(true);
+        }catch (Exception e){}
+        if (BuildConfig.DEBUG) {
+            webView.setWebContentsDebuggingEnabled(true);
             try {
-                WebSettings settings = webView.getSettings();
-                Method m = WebSettings.class.getDeclaredMethod("setAllowUniversalAccessFromFileURLs", boolean.class);
-                m.setAccessible(true);
-                m.invoke(settings, true);
-            }catch (Exception e){}
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && BuildConfig.DEBUG) {
-            try {
-                Method m=WebView.class.getDeclaredMethod("setWebContentsDebuggingEnabled",boolean.class);
-                m.setAccessible(true);
-                m.invoke(webView,true);
-                m=WebSettings.class.getDeclaredMethod("setMediaPlaybackRequiresUserGesture",boolean.class);
+                Method m=WebSettings.class.getDeclaredMethod("setMediaPlaybackRequiresUserGesture",boolean.class);
                 m.setAccessible(true);
                 m.invoke(webView.getSettings(),false);
             } catch (Exception e) {
@@ -475,6 +577,23 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
         String htmlPage = null;
         RequestHandler handler=getRequestHandler();
         if (handler != null) htmlPage=handler.getStartPage();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            //try to workaround on some chrome bug that uses this controller
+            // failed 'importScripts' on 'WorkerGlobalScope'
+            //see https://issues.chromium.org/issues/356827071
+            //    https://issues.chromium.org/issues/356399846
+            //    https://docs.google.com/document/d/1qrRBDKg7YU7bwgmAgqv_1vljYlySehh-dZEpIx-rQ8E/edit?tab=t.0
+            ServiceWorkerController.getInstance().setServiceWorkerClient(new ServiceWorkerClient(){
+                @Nullable
+                @Override
+                public WebResourceResponse shouldInterceptRequest(WebResourceRequest request) {
+                    AvnLog.i(LOGPRFX,"service worker load "+request.getUrl().toString());
+                    WebResourceResponse rt=handleRequest(null,request.getUrl().toString(),request.getMethod());
+                    if (rt != null) return rt;
+                    return super.shouldInterceptRequest(request);
+                }
+            });
+        }
         webView.setWebViewClient(new WebViewClient() {
             public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
                 Toast.makeText(MainActivity.this, "Oh no! " + description, Toast.LENGTH_SHORT).show();
@@ -484,39 +603,22 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    if (request.getMethod().equalsIgnoreCase("head")){
-                        WebResourceResponse rt=handleRequest(view,request.getUrl().toString(),request.getMethod());
-                        if (rt != null) return rt;
-                    }
+                    WebResourceResponse rt=handleRequest(view,request.getUrl().toString(),request.getMethod());
+                    if (rt != null) return rt;
                 }
                 return super.shouldInterceptRequest(view, request);
             }
 
-            private WebResourceResponse handleRequest(WebView view, String url, String method){
-                RequestHandler handler= getRequestHandler();
-                WebResourceResponse rt=null;
-                if (handler != null) {
-                    try {
-                        rt = handler.handleRequest(view,url,method);
-                    }catch (Throwable t){
-                        AvnLog.e("web request for "+url+" failed",t);
-                        InputStream is=new ByteArrayInputStream(new byte[]{});
-                        if (Build.VERSION.SDK_INT >= 21){
-                            return new WebResourceResponse("application/octet-stream", "UTF-8",500,"error "+t.getMessage(),new HashMap<String, String>(),is);
-                        }
-                        else {
-                            return new WebResourceResponse("application/octet-stream", "UTF-8", is);
-                        }
-                    }
-                }
-                return rt;
-            }
+
 
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
-                WebResourceResponse rt=handleRequest(view,url,"GET");
-                if (rt==null) return super.shouldInterceptRequest(view, url);
-                return rt;
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+                    WebResourceResponse rt = handleRequest(view, url, "GET");
+                    if (rt == null) return super.shouldInterceptRequest(view, url);
+                    return rt;
+                }
+                return super.shouldInterceptRequest(view, url);
             }
 
             @Override
@@ -648,35 +750,54 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        handleUsbDeviceAttach(intent);
+        try {
+            handleUsbDeviceAttach(intent);
+        }catch (Throwable t){
+            showCrashDialog(t);
+        }
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        AvnLog.i(LOGPRFX,"MainActivity:onCreate");
         super.onCreate(savedInstanceState);
         if (running) return;
-        showsDialog=false;
-        setContentView(R.layout.main);
-        dlProgress=findViewById(R.id.dlIndicator);
-        dlProgress.setOnClickListener(view -> {
-            if (download != null) download.stop();
-        });
-        dlText=findViewById(R.id.dlInfo);
-        sharedPrefs=getSharedPreferences(Constants.PREFNAME, Context.MODE_PRIVATE);
-        PreferenceManager.setDefaultValues(this,Constants.PREFNAME,Context.MODE_PRIVATE, R.xml.sound_preferences, false);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        assetManager=getAssets();
-        sharedPrefs.registerOnSharedPreferenceChangeListener(this);
-        reloadReceiver =new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                sendEventToJs(Constants.JS_RELOAD,1);
+        try {
+            showsDialog = false;
+            setContentView(R.layout.main);
+            dlProgress = findViewById(R.id.dlIndicator);
+            dlProgress.setOnClickListener(view -> {
+                if (download != null) download.stop();
+            });
+            dlText = findViewById(R.id.dlInfo);
+            sharedPrefs = getSharedPreferences(Constants.PREFNAME, Context.MODE_PRIVATE);
+            boolean dfs=false;
+            try {
+                dfs = sharedPrefs.getBoolean(Constants.DEFAULTS_SET, false);
+            }catch (Throwable t){}
+            if (! dfs) {
+                AvnLog.i(LOGPRFX,"MainActivity: setting defaults");
+                PreferenceManager.setDefaultValues(this, Constants.PREFNAME, Context.MODE_PRIVATE, R.xml.sound_preferences, true);
+                PreferenceManager.setDefaultValues(this, Constants.PREFNAME, Context.MODE_PRIVATE, R.xml.main_preferences, true);
+                sharedPrefs.edit().putBoolean(Constants.DEFAULTS_SET,true).apply();
             }
-        };
-        IntentFilter triggerFilter=new IntentFilter((Constants.BC_RELOAD_DATA));
-        AvnUtil.registerUnexportedReceiver(this,reloadReceiver,triggerFilter);
-        running=true;
-        handleUsbDeviceAttach(getIntent());
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            assetManager = getAssets();
+            sharedPrefs.registerOnSharedPreferenceChangeListener(this);
+            reloadReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    sendEventToJs(Constants.JS_RELOAD, 1);
+                }
+            };
+            IntentFilter triggerFilter = new IntentFilter((Constants.BC_RELOAD_DATA));
+            AvnUtil.registerUnexportedReceiver(this, reloadReceiver, triggerFilter);
+            running = true;
+            handleUsbDeviceAttach(getIntent());
+            checkForInitialDialogs();
+        }catch (Throwable t){
+            showCrashDialog(t);
+        }
     }
 
     @Override
@@ -749,12 +870,12 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
     }
 
     private boolean checkSettingsInternal(){
-        if (checkSettings && !checkSettings(this,true)) {
-            checkSettings=false;
+        if (settingsAlreadyChecked) return true;
+        if (!checkSettings(this,true)) {
             showSettings(true);
+            settingsAlreadyChecked=true;
             return false;
         }
-        checkSettings=false;
         return true;
     }
     private boolean checkForInitialDialogs(){
@@ -785,7 +906,7 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
                     showsDialog=false;
-                    checkSettings=false; //settings are checked in the settings activity
+                    settingsAlreadyChecked=true;
                     showSettings(false);
                 }
             });
@@ -828,10 +949,11 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
     @Override
     protected void onPause() {
         super.onPause();
-        AvnLog.d("main: pause");
+        AvnLog.i(LOGPRFX,"MainActivity: onPause");
     }
 
     private void onResumeInternal() {
+        AvnLog.i(LOGPRFX,"MainActivity:onResumeInternal");
         if (webView == null) {
             shoLoading();
         }
@@ -852,6 +974,7 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
         if (webView == null) {
             initializeWebView();
         }
+        AvnLog.i(LOGPRFX,"MainActivity:onResumeInternal done");
     }
 
     private void shoLoading() {
@@ -865,21 +988,31 @@ public class MainActivity extends Activity implements IMediaUpdater, SharedPrefe
     private void handleBars(){
         SharedPreferences sharedPrefs=getSharedPreferences(Constants.PREFNAME, Context.MODE_PRIVATE);
         boolean hideStatus=sharedPrefs.getBoolean(Constants.HIDE_BARS,false);
+        AvnLog.dfk(LOGPRFX,"handleBars,hide=%s",hideStatus);
+        View decorView = getWindow().getDecorView();
+        int flags=0;
         if (hideStatus ) {
-            View decorView = getWindow().getDecorView();
-            int flags=View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+            flags=View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
             flags+=View.SYSTEM_UI_FLAG_FULLSCREEN;
             flags+=View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
-            decorView.setSystemUiVisibility(flags);
         }
+        else{
+            flags=decorView.getSystemUiVisibility();
+            flags &= ~(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY+View.SYSTEM_UI_FLAG_FULLSCREEN+View.SYSTEM_UI_FLAG_HIDE_NAVIGATION);
+        }
+        decorView.setSystemUiVisibility(flags);
     }
     @Override
     protected void onResume() {
+        AvnLog.i(LOGPRFX,"MainActivity:onResume");
         super.onResume();
         handleBars();
-        AvnLog.d("main: onResume");
-        if (! checkForInitialDialogs()){
-            onResumeInternal();
+        if (! showsDialog){
+            try {
+                onResumeInternal();
+            }catch (Throwable t){
+                showCrashDialog(t);
+            }
         }
     }
 

@@ -5,36 +5,25 @@
 import globalStore from '../util/globalstore.jsx';
 import keys from '../util/keys.jsx';
 import helper from '../util/helper.js';
+import Helper from '../util/helper.js';
 import React from 'react';
 import Page from '../components/Page.jsx';
 import Requests from '../util/requests.js';
 import Mob from '../components/Mob.js';
-import Toast,{hideToast} from '../components/Toast.jsx';
-import OverlayDialog, {showPromiseDialog} from '../components/OverlayDialog.jsx';
+import Toast, {hideToast} from '../components/Toast.jsx';
+import {showPromiseDialog} from '../components/OverlayDialog.jsx';
 import keyhandler from '../util/keyhandler.js';
 import CodeFlask from 'codeflask';
 import Prism from 'prismjs';
 import GuiHelpers from '../util/GuiHelpers.js';
-import InputMonitor from '../hoc/InputMonitor.jsx';
-import Helper from "../util/helper.js";
 import {ItemActions} from "../components/FileDialog";
 import {ConfirmDialog} from "../components/BasicDialogs";
+import {languageMap} from "../components/EditDialog";
 
-//add all extensions here that we can edit
-//if set to undefined we will edit them but without highlighting
-const languageMap={
-    js:'js',
-    json:'json',
-    html:'markup',
-    css:'css',
-    xml: 'markup',
-    gpx: 'markup',
-    txt: undefined
-};
 const MAXEDITSIZE=50000;
 
 
-class ViewPageBase extends React.Component{
+class ViewPage extends React.Component{
     constructor(props){
         super(props);
         let self=this;
@@ -56,10 +45,12 @@ class ViewPageBase extends React.Component{
         if (this.html){
             state.data=this.html;
         }
+        if (this.props.options.data){
+            state.data=this.props.options.data;
+        }
         this.state=state;
         this.changed=this.changed.bind(this);
         this.flask=undefined;
-        keyhandler.disable();
     }
 
     buttons() {
@@ -184,7 +175,10 @@ class ViewPageBase extends React.Component{
     componentDidMount(){
         let self=this;
         if (this.isImage()) return;
-        if (this.html) {
+        if (this.html ) {
+            return;
+        }
+        if (this.props.options.data){
             return;
         }
         if (this.url && this.props.options.useIframe){
@@ -209,7 +203,6 @@ class ViewPageBase extends React.Component{
 
     }
     componentWillUnmount(){
-        keyhandler.enable();
     }
     render(){
         let self=this;
@@ -258,7 +251,6 @@ class ViewPageBase extends React.Component{
     }
 }
 
-var ViewPage=InputMonitor(ViewPageBase);
 ViewPage.VIEWABLES=Object.keys(languageMap).concat(GuiHelpers.IMAGES);
 ViewPage.EDITABLES=Object.keys(languageMap);
 ViewPage.MAXEDITSIZE=MAXEDITSIZE;

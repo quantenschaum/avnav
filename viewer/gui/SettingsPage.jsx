@@ -24,7 +24,6 @@ import DimHandler from '../util/dimhandler';
 import FullScreen from '../components/Fullscreen';
 import {stateHelper} from "../util/GuiHelpers";
 import Formatter from "../util/formatter";
-import {SaveItemDialog} from "../components/LoadSaveDialogs";
 import PropertyHandler from '../util/propertyhandler';
 import {ItemActions} from "../components/FileDialog";
 import loadSettings from "../components/LoadSettingsDialog";
@@ -32,6 +31,14 @@ import propertyhandler from "../util/propertyhandler";
 import LocalStorage from '../util/localStorageManager';
 import leavehandler from "../util/leavehandler";
 import {ConfirmDialog} from "../components/BasicDialogs";
+import {checkName, ItemNameDialog} from "../components/ItemNameDialog";
+import Helper, {avitem, setav} from "../util/helper";
+import {
+    default as EditableParameterUIFactory,
+    EditableParameterListUI,
+    getCommonParam
+} from "../components/EditableParameterUI";
+import {EditableStringParameterBase} from "../util/EditableParameter";
 
 const settingsSections={
     Layer:      [keys.properties.layers.base,keys.properties.layers.ais,keys.properties.layers.track,keys.properties.layers.nav,keys.properties.layers.boat,
@@ -39,13 +46,14 @@ const settingsSections={
         keys.properties.layers.user],
     UpdateTimes:[keys.properties.positionQueryTimeout,keys.properties.trackQueryTimeout,keys.properties.aisQueryTimeout, keys.properties.networkTimeout ,
                 keys.properties.connectionLostAlarm],
-    Widgets:    [keys.properties.widgetFontSize,keys.properties.allowTwoWidgetRows,keys.properties.showClock,keys.properties.showZoom,keys.properties.showWind,keys.properties.showDepth],
+    Widgets:    [keys.properties.widgetFontSize,keys.properties.allowTwoWidgetRows],
     Buttons:    [keys.properties.style.buttonSize,keys.properties.cancelTop,keys.properties.buttonCols,keys.properties.showDimButton,keys.properties.showFullScreen,
         keys.properties.hideButtonTime,keys.properties.showButtonShade, keys.properties.autoHideNavPage,keys.properties.autoHideGpsPage,keys.properties.nightModeNavPage,
         keys.properties.showSplitButton],
     Layout:     [keys.properties.layoutName,keys.properties.baseFontSize,keys.properties.smallBreak,keys.properties.nightFade,
         keys.properties.nightChartFade,keys.properties.dimFade,keys.properties.localAlarmSound,keys.properties.alarmVolume ,
-        keys.properties.titleIcons, keys.properties.titleIconsGps, keys.properties.startLastSplit],
+        keys.properties.titleIcons, keys.properties.titleIconsGps, keys.properties.startLastSplit,
+        keys.properties.autoUpdateUserCss],
     AIS:        [keys.properties.aisDistance,keys.properties.aisCenterMode,keys.properties.aisWarningCpa,keys.properties.aisWarningTpa,
         keys.properties.aisShowEstimated,keys.properties.aisEstimatedOpacity,keys.properties.aisCpaEstimated,
         keys.properties.aisMinDisplaySpeed,keys.properties.aisOnlyShowMoving,
@@ -55,19 +63,21 @@ const settingsSections={
         keys.properties.aisIconBorderWidth,keys.properties.aisIconScale,keys.properties.aisClassbShrink,keys.properties.aisShowA,
         keys.properties.aisShowB,keys.properties.aisShowOther,keys.properties.aisUseHeading,
         keys.properties.aisReducedList,keys.properties.aisListUpdateTime, keys.properties.aisHideTime, keys.properties.aisLostTime,
-        keys.properties.aisMarkAllWarning],
+        keys.properties.aisMarkAllWarning,keys.properties.aisShowErrors],
     Navigation: [keys.properties.bearingColor,keys.properties.bearingWidth,keys.properties.navCircleColor,keys.properties.navCircleWidth,keys.properties.navCircle1Radius,keys.properties.navCircle2Radius,keys.properties.navCircle3Radius,
         keys.properties.navBoatCourseTime,keys.properties.boatIconScale,keys.properties.boatDirectionMode,
         keys.properties.boatDirectionVector,keys.properties.boatSteadyDetect,keys.properties.boatSteadyMax,
-        keys.properties.courseAverageTolerance,keys.properties.gpsXteMax,keys.properties.courseAverageInterval,keys.properties.speedAverageInterval,keys.properties.positionAverageInterval,keys.properties.anchorWatchDefault,keys.properties.anchorCircleWidth,
-        keys.properties.anchorCircleColor,keys.properties.windKnots,keys.properties.windScaleAngle,keys.properties.measureColor,keys.properties.measureRhumbLine],
+        keys.properties.courseAverageTolerance,keys.properties.courseAverageInterval,keys.properties.speedAverageInterval,keys.properties.positionAverageInterval,keys.properties.anchorWatchDefault,keys.properties.anchorCircleWidth,
+        keys.properties.anchorCircleColor,keys.properties.measureColor,keys.properties.measureRhumbLine],
     Map:        [
         keys.properties.startNavPage,
         keys.properties.autoZoom,keys.properties.mobMinZoom,keys.properties.style.useHdpi,
-        keys.properties.clickTolerance,keys.properties.featureInfo,keys.properties.emptyFeatureInfo,
+        keys.properties.clickTolerance,keys.properties.featureInfo,
         keys.properties.mapFloat,keys.properties.mapScale,keys.properties.mapUpZoom,
         keys.properties.mapOnlineUpZoom,
-        keys.properties.mapLockMode,keys.properties.mapLockMove,keys.properties.mapScaleBarText,keys.properties.mapZoomLock],
+        keys.properties.mapLockMode,keys.properties.mapLockMove,keys.properties.mapAlwaysCenter,keys.properties.mapScaleBarText,keys.properties.mapZoomLock,
+        keys.properties.fontBase,keys.properties.fontColor,keys.properties.fontShadowWidth,keys.properties.fontShadowColor
+    ],
     Track:      [keys.properties.trackColor,keys.properties.trackWidth,keys.properties.trackInterval,keys.properties.initialTrackLength],
     Route:      [keys.properties.routeColor,keys.properties.routeWidth,keys.properties.routeWpSize,keys.properties.routingTextSize,keys.properties.routeApproach,keys.properties.routeShowLL],
     Remote:     [keys.properties.remoteChannelName,keys.properties.remoteChannelRead,keys.properties.remoteChannelWrite,keys.properties.remoteGuardTime]
@@ -106,272 +116,108 @@ const SectionItem=(props)=>{
     );
 };
 
-const CheckBoxSettingsItem=(props)=>{
-    return (
-        <Checkbox
-            className={props.className}
-            onChange={props.onClick}
-            label={props.label}
-            value={props.value}/>
-    );
-};
-const CheckBoxListSettingsItem=(lprops)=>{
-    let current=lprops.value;
-    if (typeof(current) !== 'object') return null;
-    let dl=[];
-    for (let k in current){
-        dl.push({label:k,value:current[k]})
+class LayoutParameterUI extends EditableStringParameterBase{
+    constructor(props) {
+        super(props,props.type,true);
+        this.render=this.render.bind(this);
+        Object.freeze(this);
     }
-    return (<div>
-        {dl.map((props)=>
-        <Checkbox
-            className={lprops.className}
-            onChange={(nv)=>{
-                let newProps=assign({},current);
-                newProps[props.label]=nv;
-                lprops.onClick(newProps);
-            }}
-            label={props.label}
-            value={props.value}/>)}
-    </div>);
-};
-
-
-const RangeItemDialog=({value,values,defaultv,label,resolveFunction})=>{
-            const [cvalue,setValue]=useState(value);
-            let range=values[0]+"..."+values[1];
-            const dialogContext=useDialogContext();
-            return(
-                <DialogFrame className="settingsDialog" title={label}>
-                    <div className="settingsRange">Range: {range}</div>
-                    <Input
-                        dialogRow={true}
-                        type={"number"}
-                        label={"Value"}
-                        min={values[0]} max={values[1]} step={values[2]||1}
-                        value={cvalue}
-                        onChange={(v)=>setValue(v)}
-                    />
-                    <DialogButtons >
-                        <DB name="reset" onClick={()=>setValue(defaultv)} close={false} visible={defaultv !== undefined} >Reset</DB>
-                        <DB name="cancel" >Cancel</DB>
-                        <DB name="ok" onClick={()=>{
-                            if (cvalue < values[0]|| cvalue > values[1]) {
-                                Toast("out of range");
-                                return;
-                            }
-                            dialogContext.closeDialog();
-                            resolveFunction(cvalue);
-                        }}
-                            close={false}
-                        >OK</DB>
-                    </DialogButtons>
-                </DialogFrame>
-            );
-        };
-const RangeSettingsItem=(properties)=> {
-    const dialogContext=useDialogContext();
-    return <div className={properties.className}
-                onClick={()=>{
-                        dialogContext.showDialog(()=>{
-                            return <RangeItemDialog
-                                {...properties}
-                                resolveFunction={(nv)=>properties.onClick(nv)}/>
-                        })
-                        }}>
-        <div className="label">{properties.label}</div>
-        <div className="value">{properties.value}</div>
-    </div>;
-};
-
-const ListSettingsItem=(properties)=> {
-    let items=[];
-    for (let k in properties.values){
-        let nv=properties.values[k].split(":");
-        if (nv.length > 1){
-            items.push({label:nv[0],value:nv[1]});
+    render({currentValues,initialValues,className,onChange}){
+        const isEditing=()=>{
+            Toast("cannot change layout during editing");
         }
-        else{
-            items.push( {label:nv[0],value:nv[0]});
+        if (LayoutHandler.isEditing()){
+            return <InputReadOnly
+                {...getCommonParam({ep:this,currentValues,className,initialValues})}
+                value={LayoutHandler.name}
+                onClick={isEditing}
+            />
         }
-    }
-    return <div className={properties.className}>
-            <div className="label">{properties.label}</div>
-            <Radio
-                onChange={function(newVal){
-                            properties.onClick(newVal);
-                        }}
-                itemList={items}
-                value={properties.value}>
-            </Radio>
-          </div>
-};
-
-const SelectSettingsItem=(properties)=> {
-    let items=[];
-    let value=properties.value;
-    for (let k in properties.values){
-        let cv=properties.values[k];
-        if (typeof(cv) !== 'object') {
-            let nv = cv.split(":");
-            if (nv.length > 1) {
-                cv={label: nv[0], value: nv[1]};
-            } else {
-                cv={label: nv[0], value: nv[0]};
+        const changeFunction=(newVal)=>{
+            if (LayoutHandler.isEditing()) {
+                isEditing();
+                return;
             }
-        }
-        items.push({label:cv.label,value:cv.value});
-        if (cv.value === properties.value){
-            value={label:cv.label,value:cv.value};
-        }
-    }
-    return(
-        <InputSelect
-            className={properties.className}
-            onChange={function(newVal){
-                properties.onClick(newVal);
-            }}
-            itemList={items}
-            changeOnlyValue={true}
-            value={value}
-            label={properties.label}
-            resetCallback={(ev)=>{
-                properties.onClick(properties.defaultv);
-            }}
-        >
-        </InputSelect>
-    )
-};
-
-
-
-
-const ColorSettingsItem=(properties)=>{
-    let style={
-        backgroundColor: properties.value
-    };
-
-    return <ColorSelector
-               className={properties.className}
-               onChange={properties.onClick}
-               label={properties.label}
-               default={properties.defaultv}
-               value={properties.value}
-        />
-        ;
-};
-
-const createSettingsItem=(item)=>{
-    if (item.type == PropertyType.CHECKBOX){
-        return CheckBoxSettingsItem;
-    }
-    if (item.type == PropertyType.MULTICHECKBOX){
-        return CheckBoxListSettingsItem;
-    }
-    if (item.type == PropertyType.RANGE){
-        return RangeSettingsItem;
-    }
-    if (item.type == PropertyType.COLOR){
-        return ColorSettingsItem;
-    }
-    if (item.type == PropertyType.LAYOUT){
-        return LayoutItem;
-    }
-    if (item.type == PropertyType.LIST){
-        return ListSettingsItem;
-    }
-    if (item.type == PropertyType.SELECT){
-        return SelectSettingsItem;
-    }
-    return (props)=>{
-        return (<div className={props.className}>
-            <div className="label">{props.label}</div>
-            <div className="value">{props.value}</div>
-        </div>)
-    }
-};
-
-const LayoutItem=(props)=>
-{
-    const isEditing=()=>{
-        Toast("cannot change layout during editing");
-    }
-    if (LayoutHandler.isEditing()){
-        props=assign({},props,
-            {value:LayoutHandler.name});
-        return <InputReadOnly
-            className={props.className}
-            label={props.label}
-            value={props.value}
-            onClick={isEditing}
-        />
-    }
-    const changeFunction=(newVal)=>{
-        if (LayoutHandler.isEditing()) {
-            isEditing();
-            return;
-        }
-        LayoutHandler.loadLayout(newVal)
-            .then((layout)=>{
-                props.onClick(newVal);
-            })
-            .catch((error)=>{
-                Toast(error+"");
-            })
-    };
-    return <InputSelect
-            className={props.className}
+            LayoutHandler.loadLayout(newVal.value,true)
+                .then((layout)=>{
+                    onChange(this.setValue(undefined, newVal.value));
+                })
+                .catch((error)=>{
+                    Toast(error+"");
+                })
+        };
+        return <InputSelect
+            {...getCommonParam({ep:this,currentValues,className,initialValues,onChange:changeFunction})}
             onChange={changeFunction}
             itemList={(currentLayout)=>{
-                return new Promise((resolve,reject)=>{
-                   LayoutHandler.listLayouts()
-                       .then((list)=>{
-                           let displayList=[];
-                           list.forEach((el)=>{
-                               let le={label:el.name,value:el.name};
-                               if (currentLayout === el.name ) le.selected=true;
-                               displayList.push(le);
-                           });
-                           resolve(displayList);
-                       })
-                       .catch((e)=>reject(e))
-                });
-            }}
-            changeOnlyValue={true}
-            value={props.value}
-            label={props.label}
-            resetCallback={(ev)=>{
-                props.onClick(props.defaultv)
-            }}
-        />;
-};
+                    return LayoutHandler.listLayouts()
+                        .then((list)=>{
+                            let displayList=[];
+                            list.forEach((el)=>{
+                                let le={label:el.name,value:el.name};
+                                if (currentLayout === el.name ) le.selected=true;
+                                displayList.push(le);
+                            });
+                            return displayList;
+                        })}
+            }
+            />
+    }
+}
+
+const itemUiFromPlain=(item)=>{
+    if (item.type === PropertyType.LAYOUT){
+        return new LayoutParameterUI({type: item.type,
+            default: item.defaultv,
+            list: item.values,
+            displayName: item.label,
+            name:item.name,
+            description: item.description
+        })
+    }
+    let rt=EditableParameterUIFactory.createEditableParameterUI({
+        type: item.type,
+        default: item.defaultv,
+        list: item.values,
+        displayName: item.label,
+        name:item.name,
+        description: item.description
+    })
+    return rt;
+}
+
+
 
 
 class SettingsPage extends React.Component{
     constructor(props){
         super(props);
-        let self=this;
         this.buttons=[
             {
                 name:'SettingsOK',
                 onClick:()=>{
-                    if (! self.leftPanelVisible()){
-                        self.handlePanel(undefined);
+                    if (! this.leftPanelVisible()){
+                        this.handlePanel(undefined);
                         return;
                     }
-                    if (!self.hasChanges()){
+                    if (!this.hasChanges()){
                         this.props.history.pop();
                         return;
                     }
-                    let values=self.values.getValues(true);
+                    let values=this.values.getValues(true);
                     //if the layout changed we need to set it
-                    if (values[keys.properties.layoutName] != globalStore.getData(keys.properties.layoutName)){
-                        if (! LayoutHandler.hasLoaded(values[keys.properties.layoutName])){
-                            Toast("layout not loaded, cannot activate it");
-                            return;
-                        }
-                        LayoutHandler.activateLayout();
+                    const layoutName = values[keys.properties.layoutName];
+                    if (!LayoutHandler.hasLoaded(layoutName)) {
+                        LayoutHandler.loadLayout(layoutName)
+                            .then((res) => {
+                                LayoutHandler.activateLayout();
+                                globalStore.storeMultiple(values);
+                                this.props.history.pop();
+                            })
+                            .catch((err) => Toast(err));
+                        return;
                     }
+                    LayoutHandler.activateLayout();
                     globalStore.storeMultiple(values);
                     this.props.history.pop();
                 }
@@ -379,8 +225,8 @@ class SettingsPage extends React.Component{
             {
                 name: 'SettingsDefaults',
                 onClick:()=> {
-                    self.confirmAbortOrDo().then(()=> {
-                        self.resetData();
+                    this.confirmAbortOrDo().then(()=> {
+                        this.resetData();
                     });
                 }
             },
@@ -398,7 +244,7 @@ class SettingsPage extends React.Component{
                     for (let key in masterValues){
                         let description = KeyHelper.getKeyDescriptions()[key];
                         if (description.type === PropertyType.LAYOUT){
-                            promises.push(LayoutHandler.loadLayout(masterValues[key]));
+                            promises.push(LayoutHandler.loadLayout(masterValues[key],true));
                         }
                     }
                     Promise.all(promises)
@@ -411,8 +257,8 @@ class SettingsPage extends React.Component{
                 name:'SettingsAndroid',
                 visible: globalStore.getData(keys.gui.global.onAndroid,false),
                 onClick:()=>{
-                    self.confirmAbortOrDo().then(()=> {
-                        self.resetChanges();
+                    this.confirmAbortOrDo().then(()=> {
+                        this.resetChanges();
                         this.props.history.pop();
                         avnav.android.showSettings();
                     });
@@ -438,8 +284,8 @@ class SettingsPage extends React.Component{
             {
                 name: 'SettingsAddons',
                 onClick:()=>{
-                    self.confirmAbortOrDo().then(()=>{
-                        self.resetChanges();
+                    this.confirmAbortOrDo().then(()=>{
+                        this.resetChanges();
                         this.props.history.push("addonconfigpage");
                     });
                 },
@@ -456,8 +302,8 @@ class SettingsPage extends React.Component{
             {
                 name: 'SettingsLoad',
                 onClick:()=>{
-                    self.confirmAbortOrDo().then(()=>{
-                        self.resetChanges();
+                    this.confirmAbortOrDo().then(()=>{
+                        this.resetChanges();
                         this.loadSettings();
                     });
                 },
@@ -467,9 +313,9 @@ class SettingsPage extends React.Component{
             {
                 name: 'SettingsReload',
                 onClick: ()=> {
-                    self.confirmAbortOrDo().then(() => {
+                    this.confirmAbortOrDo().then(() => {
                         leavehandler.stop();
-                        window.location.href = window.location.href;
+                        Helper.reloadPage();
                     });
                 },
                 storeKeys:{
@@ -485,11 +331,11 @@ class SettingsPage extends React.Component{
             {
                 name: 'Cancel',
                 onClick: ()=>{
-                    if (! self.leftPanelVisible()){
-                        self.handlePanel(undefined);
+                    if (! this.leftPanelVisible()){
+                        this.handlePanel(undefined);
                         return;
                     }
-                    self.confirmAbortOrDo().then(()=> {
+                    this.confirmAbortOrDo().then(()=> {
                         this.props.history.pop();
                 });
                 }
@@ -509,7 +355,8 @@ class SettingsPage extends React.Component{
             leftPanelVisible:true,
             section:'Layer'
         };
-        this.values=stateHelper(this,globalStore.getMultiple(this.flattenedKeys));
+        this.initialValues=globalStore.getMultiple(this.flattenedKeys)
+        this.values=stateHelper(this,this.initialValues);
         this.defaultValues={};
         this.flattenedKeys.forEach((key)=>{
             let description=KeyHelper.getKeyDescriptions()[key];
@@ -549,24 +396,25 @@ class SettingsPage extends React.Component{
         PropertyHandler.listSettings(true)
             .then((settings)=>{
                 const checkFunction=(newName)=>{
-                    for (let idx in settings){
-                        if (settings[idx].value === newName) return {existing:true};
-                    }
-                    return {}
+                    return checkName(newName,settings,(item)=>item.label+".json");
                 }
-                return SaveItemDialog.createDialog(proposedName,checkFunction,{
-                    title: "Select Name to save settings",
-                    itemLabel: 'Settings',
-                    fixedPrefix: 'user.'
+                return showPromiseDialog(undefined,(dprops)=><ItemNameDialog
+                    {...dprops}
+                    fixedPrefix={'user.'}
+                    fixedExt={'json'}
+                    title={"Select Name to save settings"}
+                    iname={proposedName}
+                    checkName={checkFunction}
+                    />)
+                    .then((res)=>res.name)
                 })
-            })
             .then((settingsName)=>{
                 if (!settingsName || settingsName === 'user.'){
                     return Promise.reject();
                 }
-                proposedName=settingsName;
+                proposedName=actions.nameForUpload(settingsName);
                 return PropertyHandler.uploadSettingsData(
-                    settingsName,
+                    proposedName,
                     PropertyHandler.exportSettings(this.values.getValues(true)),
                     true
                 )
@@ -587,7 +435,9 @@ class SettingsPage extends React.Component{
                 if (e) Toast(e);
             })
     }
-    changeItem(item,value){
+    changeItem(ev){
+        const item=avitem(ev);
+        const value=avitem(ev,'value')
         this.values.setValue(item.name,value);
     }
 
@@ -602,24 +452,50 @@ class SettingsPage extends React.Component{
     }
 
     handleLayoutClick(){
-        let self=this;
         let isEditing=LayoutHandler.isEditing();
         if (! isEditing){
             let startDialog=()=> {
                 LayoutHandler.listLayouts()
                     .then((list)=> {
-                        let name = LayoutHandler.nameToBaseName(LayoutHandler.name);
-                        SaveItemDialog.createDialog(name,(newName)=>{
-                            return {existing:list.indexOf(newName) >= 0};
-                        },{
-                            title: "Start Layout Editor",
-                            itemLabel: 'Layout',
-                            subtitle: "save changes to",
-                            fixedPrefix: 'user.',
-                            allowOverwrite: true
-                        })
-                            .then((newName)=> {
-                                LayoutHandler.startEditing(newName);
+                        showPromiseDialog(undefined,(dprops)=><ItemNameDialog
+                            {...dprops}
+                            title={"Start Layout Editor"}
+                            iname={LayoutHandler.nameToBaseName(LayoutHandler.name)}
+                            fixedPrefix={'user.'}
+                            fixedExt={'json'}
+                            checkName={(newName)=> {
+                                if (newName) {
+                                    let checkName=newName.replace(/^user./,'').replace(/\.json$/,'');
+                                    if (! checkName){
+                                        return {
+                                            error:'name must not be empty',
+                                            proposal: LayoutHandler.nameToBaseName(LayoutHandler.name)
+                                        }
+                                    }
+                                    if (checkName.indexOf('.') >= 0){
+                                        return {
+                                            error: 'names must not contain a .',
+                                            proposal: checkName.replace(/\./g,'')
+                                        }
+                                    }
+                                }
+                                let cr=checkName(newName,undefined,undefined);
+                                if (cr) return cr;
+                                cr=checkName(newName,list,(item)=>item.name+'.json');
+                                if (cr){
+                                    return {
+                                        info: "existing"
+                                    }
+                                }
+                                else{
+                                    return {
+                                        info: "new"
+                                    }
+                                }
+                            }}
+                        />)
+                            .then((res)=> {
+                                LayoutHandler.startEditing(LayoutHandler.fileNameToServerName(res.name));
                                 this.props.history.pop();
                             })
                             .catch(()=> {
@@ -633,7 +509,7 @@ class SettingsPage extends React.Component{
                 startDialog();
                 return;
             }
-            self.confirmAbortOrDo().then(()=>{
+            this.confirmAbortOrDo().then(()=>{
                 this.resetChanges();
                 startDialog();
             }).catch(()=>{});
@@ -645,7 +521,6 @@ class SettingsPage extends React.Component{
 
     resetData(){
         let values=assign({},this.defaultValues);
-
         this.values.setState(values,true);
     }
     hasChanges(){
@@ -667,13 +542,13 @@ class SettingsPage extends React.Component{
             });
         }
     }
-    sectionClick(item){
+    sectionClick(ev){
+        const item=avitem(ev);
         this.handlePanel(item.name);
     }
     componentDidMount(){
     }
     MainContent(props){
-        let self=this;
         let leftVisible = props.leftPanelVisible;
         let rightVisible = !props.small || !props.leftPanelVisible;
         let leftClass = "sectionList";
@@ -706,20 +581,16 @@ class SettingsPage extends React.Component{
             for (let s in settingsSections[section]) {
                 let key = settingsSections[section][s];
                 if (settingsConditions[key] !== undefined){
-                    if (! settingsConditions[key](self.values.getValues())) continue;
+                    if (! settingsConditions[key](this.values.getValues())) continue;
                 }
                 let description = KeyHelper.getKeyDescriptions()[key];
-                let value=self.values.getValue(key);
+                let value=this.values.getValue(key);
                 let className="listEntry";
-                if (value === this.defaultValues[key]){
-                    className+=" defaultValue";
-                }
-                else{
+                if (value !== this.defaultValues[key]){
                     if (! sectionChanges[section]) sectionChanges[section]={};
                     sectionChanges[section].isDefault=false;
                 }
                 if (this.values.isItemChanged(key)) {
-                    className+=" changed";
                     if (! sectionChanges[section]) sectionChanges[section]={};
                     sectionChanges[section].isChanged=true;
                 }
@@ -727,12 +598,12 @@ class SettingsPage extends React.Component{
                     className+=" prefix";
                 }
                 if (section === currentSection) {
-                    let item = assign({}, description, {
+                    let item = {...description,
                         name: key,
                         value: value,
                         className: className
-                    });
-                    settingsItems.push(item);
+                    };
+                    settingsItems.push(itemUiFromPlain(item));
                 }
             }
         }
@@ -752,34 +623,39 @@ class SettingsPage extends React.Component{
                     className={leftClass}
                     scrollable={true}
                     itemClass={SectionItem}
-                    onItemClick={self.sectionClick}
+                    onItemClick={this.sectionClick}
                     itemList={sectionItems}
                 /> : null}
-                {rightVisible ? <ItemList
-                    className="settingsList"
-                    scrollable={true}
-                    itemCreator={createSettingsItem}
-                    itemList={settingsItems}
-                    onItemClick={self.changeItem}
-                /> : null}
+                {rightVisible ? <div
+                    className="settingsList dialogObjects">
+                        <EditableParameterListUI
+                            values={this.values.getValues()}
+                            initialValues={this.initialValues}
+                            parameters={settingsItems}
+                            onChange={(nv)=>{
+                                for (let k in nv){
+                                    this.values.setValue(k,nv[k]);
+                            }}}
+                            itemClassName={'listEntry'}
+                        />
+                    </div> : null}
             </div>);
     };
     render() {
-        let self = this;
         let MainContent=this.MainContent;
         return (
             <Page
-                {...self.props}
+                {...this.props}
                 id="settingspage"
                 mainContent={
                             <MainContent
-                                section={self.state.section}
-                                leftPanelVisible={self.state.leftPanelVisible}
-                                small={self.props.small}
+                                section={this.state.section}
+                                leftPanelVisible={this.state.leftPanelVisible}
+                                small={this.props.small}
                             />
                         }
-                buttonList={self.buttons}
-                title={"Settings"+((self.props.small && !self.state.leftPanelVisible)?" "+self.state.section:"")}
+                buttonList={this.buttons}
+                title={"Settings"+((this.props.small && !this.state.leftPanelVisible)?" "+this.state.section:"")}
                 />);
     }
 }
