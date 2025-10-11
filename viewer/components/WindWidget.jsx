@@ -114,6 +114,7 @@ WindWidget.propTypes={
     show360: PropTypes.bool,
 };
 
+WindWidget.formatter='formatSpeed';
 WindWidget.predefined= {
     storeKeys: WindStoreKeys,
     editableParameters: {
@@ -124,10 +125,9 @@ WindWidget.predefined= {
             default: 'auto',
             description: 'which wind data to be shown\nauto will try apparent, trueAngle, trueDirection and display the first found data'
         },
-        formatter: true,
+        formatter: false,
         formatterParameters: true
     },
-    formatter :'formatSpeed'
 };
 
 export default WindWidget;

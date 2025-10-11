@@ -159,6 +159,7 @@ WindGraphics.propTypes={
     nightMode: PropTypes.bool,
     show360: PropTypes.bool
 };
+WindGraphics.formatter='formatSpeed';
 WindGraphics.predefined= {
     storeKeys: WindStoreKeys,
     editableParameters: {
@@ -169,7 +170,7 @@ WindGraphics.predefined= {
             default: 'auto',
             description:'which wind data to be shown\nauto will try apparent, trueAngle, trueDirection and display the first found data'
         },
-        formatter: true,
+        formatter: false,
         formatterParameters: true,
         caption: true
     },

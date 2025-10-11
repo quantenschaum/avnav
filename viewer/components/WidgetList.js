@@ -53,7 +53,6 @@ let widgetList=[
         formatter: 'formatDirection360',
         editableParameters: {
             unit: false,
-            formatterParameters: true
         }
     },
     {
@@ -67,7 +66,6 @@ let widgetList=[
         formatter: 'formatDirection360',
         editableParameters: {
             unit: false,
-            formatterParameters: true
         }
     },
     {
@@ -81,7 +79,6 @@ let widgetList=[
         formatter: 'formatDirection360',
         editableParameters: {
             unit: false,
-            formatterParameters: true
         }
     },
     {
@@ -269,6 +266,7 @@ let widgetList=[
         formatter: 'formatSpeed',
         formatterParameters: ['kn'],
         editableParameters: {
+            formatter: false,
             formatterParameters: true,
             value: false,
             caption: false,
