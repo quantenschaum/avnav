@@ -86,7 +86,7 @@ const WindWidget = (props) => {
         <WidgetFrame {...props} addClass="windWidget" caption={undefined} unit={undefined}>
             {(props.mode === 'horizontal') ?
                 <React.Fragment>
-                    <WidgetHead caption={'W' + wind.suffix} unit={'°/'+unit}/>
+                    <WidgetHead caption={props.caption?props.caption:'W' + wind.suffix} unit={'°/'+unit}/>
                     <div className="widgetData">
                         {angle}/{speed}
                     </div>
@@ -114,7 +114,6 @@ WindWidget.propTypes={
     show360: PropTypes.bool,
 };
 
-WindWidget.formatter='formatSpeed';
 WindWidget.predefined= {
     storeKeys: WindStoreKeys,
     formatter: 'formatSpeed',

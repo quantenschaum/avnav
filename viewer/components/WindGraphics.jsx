@@ -159,7 +159,6 @@ WindGraphics.propTypes={
     nightMode: PropTypes.bool,
     show360: PropTypes.bool
 };
-WindGraphics.formatter='formatSpeed';
 WindGraphics.predefined= {
     storeKeys: WindStoreKeys,
     editableParameters: {

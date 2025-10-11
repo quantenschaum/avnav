@@ -30,16 +30,7 @@ let widgetList=[
         editableParameters: {
             unit:false
         },
-        formatter:'formatSpeed',
-        formatterParameters: ['kn'],
-        editableParameters: {
-            unit: false,
-        },
-        translateFunction: (props)=>{
-            return {...props,
-                unit: ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : props.unit,
-            }
-        }
+        formatter:'formatSpeed'
     },
     {
         name: 'COG',
@@ -152,14 +143,8 @@ let widgetList=[
             }
         },
         formatter: 'formatDistance',
-        formatterParameters: ['nm'],
         editableParameters: {
-            unit: false,
-        },
-        translateFunction: (props)=>{
-            return {...props,
-                unit: ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : props.unit,
-            }
+            unit: false
         }
 
     },
@@ -186,16 +171,7 @@ let widgetList=[
         editableParameters: {
             unit:false
         },
-        formatter:'formatSpeed',
-        formatterParameters: ['kn'],
-        editableParameters: {
-            unit: false,
-        },
-        translateFunction: (props)=>{
-            return {...props,
-                unit: ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : props.unit,
-            }
-        }
+        formatter:'formatSpeed'
 
     },
     {
@@ -208,16 +184,7 @@ let widgetList=[
         editableParameters: {
             unit:false
         },
-        formatter: 'formatSpeed',
-        formatterParameters: ['kn'],
-        editableParameters: {
-            unit: false,
-        },
-        translateFunction: (props)=>{
-            return {...props,
-                unit: ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : props.unit,
-            }
-        }
+        formatter: 'formatSpeed'
     },
     {
         name: 'WindAngle',
@@ -227,7 +194,7 @@ let widgetList=[
         storeKeys:WindStoreKeys,
         formatter: 'formatString',
         editableParameters: {
-            formatterParameters: true,
+            formatterParameters: false,
             formatter: false,
             value: false,
             caption: false,
@@ -261,14 +228,10 @@ let widgetList=[
     {
         name: 'WindSpeed',
         default: "---",
-        unit: "kn",
         caption: 'Wind Speed',
         storeKeys:WindStoreKeys,
         formatter: 'formatSpeed',
-        formatterParameters: ['kn'],
         editableParameters: {
-            formatter: false,
-            formatterParameters: true,
             value: false,
             caption: false,
             unit: false,
@@ -277,14 +240,13 @@ let widgetList=[
         translateFunction: (props)=>{
             const captions={
                 A:'AWS',
-                TA: 'TWS',
                 TD: 'TWS',
+                TA: 'TWS'
             };
             let wind=getWindData(props);
             return {...props,
                 value:wind.windSpeed,
-                caption:captions[wind.suffix],
-                unit: ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : props.unit,
+                caption:captions[wind.suffix]
             }
         }
     },
@@ -329,15 +291,7 @@ let widgetList=[
             unit:false
         },
         formatter: 'formatDistance',
-        formatterParameters: ['m'],
-        editableParameters: {
-            unit: false,
-        },
-        translateFunction: (props)=>{
-            return {...props,
-                unit: ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : props.unit,
-            }
-        }
+        formatterParameters: ['m']
     },
     {
         name: 'AnchorWatchDistance',
@@ -363,16 +317,7 @@ let widgetList=[
         editableParameters: {
             unit:false
         },
-        formatter: 'formatDistance',
-        formatterParameters: ['nm'],
-        editableParameters: {
-            unit: false,
-        },
-        translateFunction: (props)=>{
-            return {...props,
-                unit: ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : props.unit,
-            }
-        }
+        formatter: 'formatDistance'
     },
     {
         name: 'RteEta',
@@ -445,14 +390,6 @@ let widgetList=[
     {
         name: 'WindDisplay',
         wclass: WindWidget,
-        storeKeys: WindWidget.storeKeys,
-        formatter: WindWidget.formatter,
-    },
-    {
-        name: 'WindGraphics',
-        wclass: WindGraphics,
-        storeKeys: WindGraphics.storeKeys,
-        formatter: WindGraphics.formatter,
     },
     {
         name: 'WindGraphics',
