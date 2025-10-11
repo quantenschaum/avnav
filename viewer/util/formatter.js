@@ -4,6 +4,11 @@
 
 import navcompute from '../nav/navcompute.js';
 import Helper from "./helper.js";
+import {OpenLocationCode} from "open-location-code";
+
+function pad(num, size, pad='0') {
+    return (''+num).trim().padStart(size,pad);
+}
 
 /**
  *
@@ -11,35 +16,39 @@ import Helper from "./helper.js";
  * @param axis
  * @returns {string}
  */
-const formatLonLatsDecimal=function(coordinate,axis){
+const formatLonLatsDecimal=function(coordinate,axis,format='DDM'){
     coordinate = Helper.to180(coordinate); // normalize to ±180°
-
-    let abscoordinate = Math.abs(coordinate);
-    let coordinatedegrees = Math.floor(abscoordinate);
-
-    let coordinateminutes = (abscoordinate - coordinatedegrees)/(1/60);
-    let numdecimal=2;
-    //correctly handle the toFixed(x) - will do math rounding
-    if (coordinateminutes.toFixed(numdecimal) == 60){
-        coordinatedegrees+=1;
-        coordinateminutes=0;
-    }
-    if( coordinatedegrees < 10 ) {
-        coordinatedegrees = "0" + coordinatedegrees;
-    }
-    if (coordinatedegrees < 100 && axis == 'lon'){
-        coordinatedegrees = "0" + coordinatedegrees;
-    }
-    let str = coordinatedegrees + "\u00B0";
-
-    if( coordinateminutes < 10 ) {
-        str +="0";
-    }
-    str += coordinateminutes.toFixed(numdecimal) + "'";
+    let deg = Math.abs(coordinate);
+    let padding = 2;
+    let str = coordinate < 0 ? "S\u00A0" :"N\u00A0";
     if (axis == "lon") {
-        str += coordinate < 0 ? "W" :"E";
+        padding = 3;
+        str = coordinate < 0 ? "W" :"E";
+    }
+    if(format=='DD') {
+      str += pad(deg.toFixed(5),padding+6) + "\u00B0";
+    } else if(format=='DMS') {
+      let DEG = Math.floor(deg);
+      let min = 60*(deg-DEG);
+      let MIN = Math.floor(min);
+      let sec = 60*(min-MIN);
+      if (sec.toFixed(1).startsWith('60.')){
+          MIN+=1;
+          sec=0;
+          if(MIN==60){
+            MIN=0;
+            DEG+=1;
+          }
+      }
+      str += pad(DEG,padding) + "\u00B0" + pad(MIN,2) + "'" + pad(sec.toFixed(1),4) + '"';
     } else {
-        str += coordinate < 0 ? "S" :"N";
+      let DEG = Math.floor(deg);
+      let min = 60*(deg-DEG);
+      if (min.toFixed(3).startsWith('60.')){
+          DEG+=1;
+          min=0;
+      }
+      str += pad(DEG,padding) + "\u00B0" + pad(min.toFixed(3),6) + "'";
     }
     return str;
 };
@@ -49,15 +58,20 @@ const formatLonLatsDecimal=function(coordinate,axis){
  * @param {Point} lonlat
  * @returns {string}
  */
-const formatLonLats=function(lonlat){
+const formatLonLats=function(lonlat,format='DDM'){
     if (! lonlat || isNaN(lonlat.lat) || isNaN(lonlat.lon)){
         return "-----";
     }
-    let ns=this.formatLonLatsDecimal(lonlat.lat, 'lat');
-    let ew=this.formatLonLatsDecimal(lonlat.lon, 'lon');
-    return ns + ', ' + ew;
+    if(format=='OLC') {
+      return new OpenLocationCode().encode(lonlat.lat,lonlat.lon);
+    }
+    let lat=this.formatLonLatsDecimal(lonlat.lat, 'lat', format);
+    let lon=this.formatLonLatsDecimal(lonlat.lon, 'lon', format);
+    return lat + ' ' + lon;
 };
-formatLonLats.parameters=[];
+formatLonLats.parameters=[
+    {name:'format',type:'SELECT',list:['DD','DDM','DMS','OLC'],default:'DDM'}
+];
 
 /**
  * format a number with a fixed number of fractions
@@ -70,33 +84,20 @@ formatLonLats.parameters=[];
  */
 
 const formatDecimal=function(number,fix,fract,addSpace,prefixZero){
-    let sign="";
     number=parseFloat(number);
-    if (isNaN(number)){
-        rt="";
-        while (fix > 0) {
-            rt+="-";
-            fix--;
-        }
-        return rt;
-    }
-    if (addSpace !== undefined && addSpace) sign=" ";
+    if (isNaN(number)) return '-'.repeat(Math.max(1,fix));
+    var sign = !!addSpace || fract<0 ? ' ' : '';
     if (number < 0) {
         number=-number;
-        sign="-";
+        sign='-';
     }
-    let rt=(prefixZero?"":sign)+number.toFixed(fract);
-    let v=10;
-    fix-=1;
-    while (fix > 0){
-        if (number < v){
-            if (prefixZero) rt="0"+rt;
-            else  rt=" "+rt;
+    var str = number.toFixed(fract); // formatted number w/o sign
+    var n = fix+fract+(fract?1:0); // expected length of string w/o sign
+    if(prefixZero || fix<0) {
+      return sign+'0'.repeat(Math.max(0,n-str.length))+str;  // add sign and padding zeroes
+    } else {
+      return ' '.repeat(Math.max(0,n-str.length))+sign+str;  // add padding spaces and sign
         }
-        v=v*10;
-        fix-=1;
-    }
-    return prefixZero?(sign+rt):rt;
 };
 formatDecimal.parameters=[
     {name:'fix',type:'NUMBER'},
@@ -106,11 +107,8 @@ formatDecimal.parameters=[
 ];
 const formatDecimalOpt=function(number,fix,fract,addSpace,prefixZero){
     number=parseFloat(number);
-    if (isNaN(number)) return formatDecimal(number,fix,fract,addSpace,prefixZero);
-    if (Math.floor(number) == number){
-        return formatDecimal(number,fix,0,addSpace,prefixZero);
-    }
-    return formatDecimal(number,fix,fract,addSpace,prefixZero);
+    var isint = Math.floor(number) == number;
+    return formatDecimal(number,fix,isint?0:fract,addSpace);
 };
 
 formatDecimalOpt.parameters=[
@@ -118,6 +116,43 @@ formatDecimalOpt.parameters=[
     {name: 'fract',type:'NUMBER'},
     {name: 'addSpace',type:'BOOLEAN'},
     {name: 'prefixZero',type:'BOOLEAN'}
+];
+
+
+/**
+ * format number with N digits
+ * at max N-1 digits after decimal point
+ * there are at least N digits and a decimal point at a variable position
+ * like the display of a multimeter in auto-range mode
+ * bigger numbers: more digits are appended to the right if necessary
+ * smaller numbers: up to maxPlaces decimal places are added or they get rounded to zero
+ * negative numbers: minus sign is added if necessary
+ * @param digits = number of (significant) digits in total, negative: padding space is added for sign
+ * @param maxPlaces = max. number of decimal places (after the decimal point, default = digits-1)
+ * @param leadingZeroes = use leading zeroes instead of spaces
+ * returns string with at least digits(+1 if digits<0) characters
+ */
+const formatFloat=function(number, digits, maxPlaces, leadingZeroes=false) {
+	var signed = digits<0;
+  digits = Math.abs(digits);
+  if(isNaN(number)) return '-'.repeat(Math.max(1,digits));
+  if(digits==0) return number.toFixed(0);
+  var sign = number<0 ? '-' : signed ? ' ' : '';
+  number = Math.abs(number);
+  if(maxPlaces===undefined) maxPlaces=digits-1;
+  var decPlaces = digits-1-Math.floor(Math.log10(Math.abs(number)));
+  decPlaces = Math.max(0,Math.min(decPlaces,Math.max(0,maxPlaces)));
+  var str = number.toFixed(decPlaces);
+  var n = digits+(str.includes('.')?1:0); // expected length of string w/o sign
+  if(leadingZeroes) {
+    return sign+'0'.repeat(Math.max(0,n-str.length))+str;  // add sign and padding zeroes
+  } else {
+    return ' '.repeat(Math.max(0,n-str.length))+sign+str;  // add padding spaces and sign
+  }
+};
+formatFloat.parameters=[
+    {name:'digits',type:'NUMBER'},
+    {name:'maxPlaces',type:'NUMBER'},
 ];
 
 /**
@@ -128,45 +163,54 @@ formatDecimalOpt.parameters=[
  */
 const formatDistance=function(distance,opt_unit){
     let number=parseFloat(distance);
-    if (isNaN(number)) return "    -"; //4 spaces
+    if (isNaN(number)) return "---";
     let factor=navcompute.NM;
+    if (opt_unit == 'ft') factor=1/3.280839895; // feet
+    if (opt_unit == 'yd') factor=3/3.280839895; // yards
     if (opt_unit == 'm') factor=1;
     if (opt_unit == 'km') factor=1000;
-    number=number/factor;
-    if (number < 1){
-        return formatDecimal(number,undefined,2,false);
-    }
-    if (number < 100){
-        return formatDecimal(number,undefined,1,false);
-    }
-    return formatDecimal(number,undefined,0,false);
+    number/=factor;
+    return formatFloat(number,3);
 };
 formatDistance.parameters=[
-    {name:'unit',type:'SELECT',list:['nm','m','km'],default:'nm'}
+    {name:'unit',type:'SELECT',list:['nm','m','km','ft','yd'],default:'nm'}
 ];
 
 /**
  *
  * @param speed in m/s
- * @param opt_unit one of kn,ms,kmh
+ * @param opt_unit one of kn,ms,kmh,bft
  * @returns {*}
  */
 
 const formatSpeed=function(speed,opt_unit){
     let number=parseFloat(speed);
-    if (isNaN(number)) return "  -"; //2 spaces
-    let factor=3600/navcompute.NM;
-    if (opt_unit == 'ms') factor=1;
-    if (opt_unit == 'kmh') factor=3.6;
-    number=number*factor;
-    if (number < 100){
-        return formatDecimal(number,undefined,1,false);
+    if (isNaN(number)) return "---";
+    if (opt_unit == 'bft') {
+      let v=number*3600/navcompute.NM;
+      if(v<=1)  return ' 0';
+      if(v<=3)  return ' 1';
+      if(v<=6)  return ' 2';
+      if(v<=10) return ' 3';
+      if(v<=16) return ' 4';
+      if(v<=21) return ' 5';
+      if(v<=27) return ' 6';
+      if(v<=33) return ' 7';
+      if(v<=40) return ' 8';
+      if(v<=47) return ' 9';
+      if(v<=55) return '10';
+      if(v<=63) return '11';
+      return '12';
     }
-    return formatDecimal(number,undefined,0,false);
+    let factor=3600/navcompute.NM;
+    if (opt_unit == 'ms' || opt_unit == 'm/s') factor=1;
+    if (opt_unit == 'kmh' || opt_unit == 'km/h') factor=3.6;
+    number*=factor;
+    return formatFloat(number,3,1);
 };
 
 formatSpeed.parameters=[
-    {name:'unit',type:'SELECT',list:['kn','ms','kmh'],default:'kn'}
+    {name:'unit',type:'SELECT',list:['kn','ms','kmh','bft','m/s','km/h'],default:'kn'}
 ];
 
 const formatDirection=function(dir,opt_rad,opt_180,opt_lz){
@@ -192,14 +236,15 @@ formatDirection360.parameters=[
  * @param {Date} curDate
  * @returns {string}
  */
-const formatTime=function(curDate){
+const formatTime=function(curDate, seconds=true){
     if (! curDate || ! (curDate instanceof Date)) return "--:--:--";
-    let datestr=this.formatDecimal(curDate.getHours(),2,0).replace(" ","0")+":"+
-        this.formatDecimal(curDate.getMinutes(),2,0).replace(" ","0")+":"+
-        this.formatDecimal(curDate.getSeconds(),2,0).replace(" ","0");
-    return datestr;
+    return this.formatDecimal(curDate.getHours(),2,0,false,true)+":"+
+           this.formatDecimal(curDate.getMinutes(),2,0,false,true)+(seconds?":"+
+           this.formatDecimal(curDate.getSeconds(),2,0,false,true):'');
 };
-formatTime.parameters=[]
+formatTime.parameters=[
+    {name:'seconds',type:'BOOLEAN',default:true}
+];
 /**
  *
  * @param {Date} curDate
@@ -207,11 +252,10 @@ formatTime.parameters=[]
  */
 const formatClock=function(curDate){
     if (! curDate || ! (curDate instanceof Date)) return "--:--";
-    let datestr=this.formatDecimal(curDate.getHours(),2,0).replace(" ","0")+":"+
-        this.formatDecimal(curDate.getMinutes(),2,0).replace(" ","0");
-    return datestr;
+    return this.formatDecimal(curDate.getHours(),2,0,false,true)+":"+
+           this.formatDecimal(curDate.getMinutes(),2,0,false,true);
 };
-formatClock.parameters=[]
+formatClock.parameters=[];
 /**
  * format date and time
  * @param {Date} curDate
@@ -219,22 +263,20 @@ formatClock.parameters=[]
  */
 const formatDateTime=function(curDate){
     if (! curDate || ! (curDate instanceof Date)) return "----/--/-- --:--:--";
-    let datestr=this.formatDecimal(curDate.getFullYear(),4,0)+"/"+
+    return this.formatDecimal(curDate.getFullYear(),4,0,false,true)+"/"+
         this.formatDecimal(curDate.getMonth()+1,2,0,false,true)+"/"+
         this.formatDecimal(curDate.getDate(),2,0,false,true)+" "+
         this.formatDecimal(curDate.getHours(),2,0,false,true)+":"+
         this.formatDecimal(curDate.getMinutes(),2,0,false,true)+":"+
         this.formatDecimal(curDate.getSeconds(),2,0,false,true);
-    return datestr;
 };
 formatDateTime.parameters=[];
 
 const formatDate=function(curDate){
     if (! curDate || ! (curDate instanceof Date)) return "----/--/--";
-    let datestr=this.formatDecimal(curDate.getFullYear(),4,0)+"/"+
-        this.formatDecimal(curDate.getMonth()+1,2,0)+"/"+
-        this.formatDecimal(curDate.getDate(),2,0);
-    return datestr;
+    return this.formatDecimal(curDate.getFullYear(),4,0,false,true)+"/"+
+           this.formatDecimal(curDate.getMonth()+1,2,0,false,true)+"/"+
+           this.formatDecimal(curDate.getDate(),2,0,false,true);
 };
 formatDate.parameters=[];
 
@@ -283,6 +325,7 @@ export default {
     formatTime,
     formatDecimalOpt,
     formatDecimal,
+    formatFloat,
     formatLonLats,
     formatLonLatsDecimal,
     formatDistance,

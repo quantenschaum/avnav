@@ -46,7 +46,7 @@ let widgetList=[
         },
         formatter: 'formatDirection360',
         editableParameters: {
-            formatterParameters: true
+            unit: false,
         }
 
     },
@@ -60,7 +60,7 @@ let widgetList=[
         },
         formatter: 'formatDirection360',
         editableParameters: {
-            formatterParameters: true
+            unit: false,
         }
     },
     {
@@ -73,31 +73,64 @@ let widgetList=[
         },
         formatter: 'formatDirection360',
         editableParameters: {
-            formatterParameters: true
+            unit: false,
         }
     },
     {
         name: 'Position',
-        default: "-------------",
+        default: "---",
         caption: 'BOAT',
         storeKeys:{
             value: keys.nav.gps.position,
-            isAverage: keys.nav.gps.positionAverageOn
+            isAverage: keys.nav.gps.positionAverageOn,
+            gpsValid: keys.nav.gps.valid,
         },
-        formatter: 'formatLonLats'
-
+        formatter: 'formatLonLats',
+        editableParameters: {
+            unit: false,
+        },
+        translateFunction: (props)=>{
+            return {...props,
+              unit: props.gpsValid?'OK':'ERROR',
+              addClass: props.gpsValid?'ok':'error',
+            }
+        },
     },
     {
         name: 'TimeStatus',
         caption: 'GPS',
-        wclass: TimeStatusWidget,
-        storeKeys: TimeStatusWidget.storeKeys
+        storeKeys:{
+            value: keys.nav.gps.rtime,
+            gpsValid: keys.nav.gps.valid,
+        },
+        formatter: 'formatTime',
+        translateFunction: (props)=>{
+            return {...props,
+              unit: props.gpsValid?'OK':'ERROR',
+              addClass: props.gpsValid?'ok':'error',
+            }
+        },
     },
     {
         name: 'ETA',
         caption: 'ETA',
-        wclass: EtaWidget,
-        storeKeys: EtaWidget.storeKeys
+        storeKeys:{
+          eta: keys.nav.wp.eta,
+          time:keys.nav.gps.rtime,
+          name: keys.nav.wp.name
+        },
+        formatter: 'formatTime',
+        translateFunction: (props)=>{
+            return {...props,
+              value: props.kind=='TTG'?new Date(props.eta-props.time):props.eta,
+              unit: props.name,
+              caption: props.kind,
+            }
+        },
+        editableParameters: {
+            unit: false,
+            kind: {type:'SELECT',list:['ETA','TTG'],default:'ETA'},
+        }
     },
     {
         name: 'DST',
@@ -129,7 +162,7 @@ let widgetList=[
         },
         formatter: 'formatDirection360',
         editableParameters: {
-            formatterParameters: true
+            unit: false,
         }
     },
     {
@@ -169,6 +202,7 @@ let widgetList=[
             formatter: false,
             value: false,
             caption: false,
+            unit: false,
             kind: {type:'SELECT',list:['auto','trueAngle','trueDirection','apparent'],default:'auto'},
             show360: {type:'BOOLEAN',default: false,description:'always show 360°'},
             leadingZero:{type:'BOOLEAN',default: false,description:'show leading zeroes (012)'}
@@ -176,8 +210,8 @@ let widgetList=[
         translateFunction: (props)=>{
             const captions={
                 A:'AWA',
+                TA: 'TWA',
                 TD: 'TWD',
-                TA: 'TWA'
             };
             const formatter={
                 A: (v)=>Formatter.formatDirection(v,undefined,!props.show360,props.leadingZero),
@@ -238,6 +272,7 @@ let widgetList=[
         },
         formatter: 'formatDirection360',
         editableParameters: {
+            unit: false,
             formatterParameters: true
         }
     },
@@ -295,9 +330,17 @@ let widgetList=[
         default: "--:--",
         caption: 'Time',
         storeKeys:{
-            value:keys.nav.gps.rtime
+            value:keys.nav.gps.rtime,
+            gpsValid: keys.nav.gps.valid,
+            visible: keys.properties.showClock
         },
-        formatter: 'formatClock'
+        formatter: 'formatClock',
+        translateFunction: (props)=>{
+            return {...props,
+              unit: props.gpsValid?'OK':'ERROR',
+              addClass: props.gpsValid?'ok':'error',
+            }
+        },
     },
     {
         name: 'WpPosition',
@@ -314,7 +357,10 @@ let widgetList=[
             }
 
         },
-        formatter: 'formatLonLats'
+        formatter: 'formatLonLats',
+        editableParameters: {
+            unit: false,
+        },
     },
     {
         name: 'Zoom',
@@ -342,27 +388,57 @@ let widgetList=[
         wclass: WindWidget,
     },
     {
+        name: 'WindGraphics',
+        wclass: WindGraphics
+    },
+    {
         name: 'DepthDisplay',
         default: "---",
         caption: 'DPT',
         unit: 'm',
         storeKeys:{
-            value:keys.nav.gps.depthBelowTransducer
+            DBK: keys.nav.gps.depthBelowKeel,
+            DBS: keys.nav.gps.depthBelowWaterline,
+            DBT: keys.nav.gps.depthBelowTransducer,
+            visible: keys.properties.showDepth,
         },
-        formatter: 'formatDecimal',
-        formatterParameters: [3,1,true]
+        formatter: 'formatDistance',
+        formatterParameters: ['m'],
+        translateFunction: (props)=>{
+            let kind=props.kind;
+            if(kind=='auto') {
+              kind='DBT';
+              if(props.DBK !== undefined) kind='DBK';
+              if(props.DBS !== undefined) kind='DBS';
+            }
+            let depth=undefined;
+            if(kind=='DBT') depth=props.DBT;
+            if(kind=='DBK') depth=props.DBK;
+            if(kind=='DBS') depth=props.DBS;
+            return {...props,
+              value: depth,
+              caption: kind,
+              unit: ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : props.unit,
+            }
+        },
+        editableParameters:{
+            unit: false,
+            value: false,
+            caption: false,
+            kind: {type:'SELECT',list:['auto','DBT','DBK','DBS'],default:'auto'}
+        },
     },
     {
         name: 'XteDisplay',
         wclass: XteWidget,
     },
     {
-        name: 'WindGraphics',
-        wclass: WindGraphics
-    },
-    {
         name: "DateTime",
-        wclass: DateTimeWidget
+        caption: 'Date/Time',
+        storeKeys:{
+            value:keys.nav.gps.rtime
+        },
+        formatter: 'formatDateTime'
     },
     {
         name: 'Empty',
