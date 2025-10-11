@@ -99,11 +99,4 @@ CenterDisplayWidget.propTypes={
     style: PropTypes.object,
     mode: PropTypes.string
 };
-
-CenterDisplayWidget.editableParameters={
-    unit: false,
-    positionFmt: Formatter.formatLonLats.parameters[0],
-    distanceUnit: Formatter.formatDistance.parameters[0],
-};
-
 export default CenterDisplayWidget;

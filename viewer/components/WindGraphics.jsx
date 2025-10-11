@@ -170,7 +170,6 @@ WindGraphics.predefined= {
             default: 'auto',
             description:'which wind data to be shown\nauto will try apparent, trueAngle, trueDirection and display the first found data'
         },
-        formatter: false,
         formatterParameters: true,
         caption: true
     },

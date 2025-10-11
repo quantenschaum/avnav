@@ -7,8 +7,7 @@ import Helper from "./helper.js";
 import {OpenLocationCode} from "open-location-code";
 
 function pad(num, size, pad='0') {
-    let s = (''+num).trim();
-    return pad.repeat(Math.max(0,size-s.length))+s;
+    return (''+num).trim().padStart(size,pad);
 }
 
 /**
@@ -308,12 +307,15 @@ const formatTemperature=function(data,opt_unit){
         if (opt_unit.toLowerCase().match(/^c/)){
             return formatDecimal(parseFloat(data)-273.15,3,1)
         }
+        if (opt_unit.toLowerCase().match(/^f/)){
+            return formatDecimal(parseFloat(data)*9/5+32,3,1)
+        }
     }catch(e){
         return "-----"
     }
 }
 formatTemperature.parameters=[
-    {name:'unit',type:'SELECT',list:['celsius','kelvin'],default:'kelvin'}
+    {name:'unit',type:'SELECT',list:['celsius','kelvin','fahrenheit'],default:'kelvin'}
 ]
 
 const skTemperature=formatTemperature;

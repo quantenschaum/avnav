@@ -91,6 +91,9 @@ let widgetList=[
             gpsValid: keys.nav.gps.valid,
         },
         formatter: 'formatLonLats',
+        editableParameters: {
+            unit: false,
+        },
         translateFunction: (props)=>{
             return {...props,
               unit: props.gpsValid?'OK':'ERROR',
@@ -171,7 +174,6 @@ let widgetList=[
         formatter: 'formatDirection360',
         editableParameters: {
             unit: false,
-            formatterParameters: true
         }
     },
     {
@@ -289,13 +291,18 @@ let widgetList=[
     {
         name: 'WaterTemp',
         default: '---',
-        unit: '°',
         caption: 'Water Temp',
         storeKeys: {
             value: keys.nav.gps.waterTemp
         },
         formatter: 'formatTemperature',
-        formatterParameters: 'celsius'
+        editableParameters: {
+            unit: false,
+        },
+        translateFunction: (props)=>{
+            let u=(props?.formatterParameters?.[0]||'').toUpperCase()[0]||'';
+            return {...props, unit: '°'+u }
+        }
     },
     {
         name: 'AnchorBearing',
@@ -409,7 +416,10 @@ let widgetList=[
             }
 
         },
-        formatter: 'formatLonLats'
+        formatter: 'formatLonLats',
+        editableParameters: {
+            unit: false,
+        },
     },
     {
         name: 'Zoom',
@@ -445,6 +455,10 @@ let widgetList=[
         formatter: WindGraphics.formatter,
     },
     {
+        name: 'WindGraphics',
+        wclass: WindGraphics
+    },
+    {
         name: 'DepthDisplay',
         default: "---",
         caption: 'DPT',
@@ -475,7 +489,6 @@ let widgetList=[
             }
         },
         editableParameters:{
-            formatterParameters: true,
             unit: false,
             value: false,
             caption: false,
@@ -553,8 +566,14 @@ let widgetList=[
     {
         name:'signalKCelsius',
         default: "---",
-        unit:'°',
-        formatter: 'skTemperature'
+        formatter: 'skTemperature',
+        editableParameters: {
+            unit: false,
+        },
+        translateFunction: (props)=>{
+            let u=(props?.formatterParameters?.[0]||'').toUpperCase()[0]||'';
+            return {...props, unit: '°'+u }
+        }
     },
     {
         name: 'signalKRoll',

@@ -117,6 +117,7 @@ WindWidget.propTypes={
 WindWidget.formatter='formatSpeed';
 WindWidget.predefined= {
     storeKeys: WindStoreKeys,
+    formatter: 'formatSpeed',
     editableParameters: {
         show360: {type: 'BOOLEAN', default: false},
         kind: {
