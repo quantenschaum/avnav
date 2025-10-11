@@ -254,13 +254,18 @@ let widgetList=[
     {
         name: 'WaterTemp',
         default: '---',
-        unit: '°',
         caption: 'Water Temp',
         storeKeys: {
             value: keys.nav.gps.waterTemp
         },
         formatter: 'formatTemperature',
-        formatterParameters: 'celsius'
+        editableParameters: {
+            unit: false,
+        },
+        translateFunction: (props)=>{
+            let u=(props?.formatterParameters?.[0]||'').toUpperCase()[0]||'';
+            return {...props, unit: '°'+u }
+        }
     },
     {
         name: 'AnchorBearing',
@@ -499,8 +504,14 @@ let widgetList=[
     {
         name:'signalKCelsius',
         default: "---",
-        unit:'°',
-        formatter: 'skTemperature'
+        formatter: 'skTemperature',
+        editableParameters: {
+            unit: false,
+        },
+        translateFunction: (props)=>{
+            let u=(props?.formatterParameters?.[0]||'').toUpperCase()[0]||'';
+            return {...props, unit: '°'+u }
+        }
     },
     {
         name: 'signalKRoll',
