@@ -101,6 +101,7 @@ CenterDisplayWidget.propTypes={
 };
 
 CenterDisplayWidget.editableParameters={
+    unit: false,
     positionFmt: Formatter.formatLonLats.parameters[0],
     distanceUnit: Formatter.formatDistance.parameters[0],
 };

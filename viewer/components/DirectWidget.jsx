@@ -7,6 +7,7 @@ import PropTypes from 'prop-types';
 import Value from './Value.jsx';
 import {WidgetFrame, WidgetProps} from "./WidgetBase";
 import {useStringsChanged} from "../hoc/Resizable";
+import {concatsp} from "../util/helper";
 
 const DirectWidget=(wprops)=>{
     const props=wprops.translateFunction?{...wprops,...wprops.translateFunction({...wprops})}:wprops;
@@ -23,8 +24,9 @@ const DirectWidget=(wprops)=>{
         value:val
     };
     const resizeSequence=useStringsChanged(display,wprops.mode==='gps')
+    if(props.addClass) props.addClass=concatsp(props.addClass,'DirectWidget');
     return (
-        <WidgetFrame {...props} addClass="DirectWidget" resizeSequence={resizeSequence} >
+        <WidgetFrame {...props} resizeSequence={resizeSequence} >
             <div className='widgetData'>
                 <Value value={val}/>
             </div>

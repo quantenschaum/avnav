@@ -72,7 +72,7 @@ export const WidgetFrame=(props)=> {
     useKeyEventHandler(props, "widget");
     const sortableProps = useAvNavSortable(props.dragId)
     let classes = Helper.concatsp(
-        "widget ",
+        "widget",
         (props.isAverage)?"average":undefined,
         props.className,
         props.addClass,

@@ -97,7 +97,6 @@ let widgetList=[
               addClass: props.gpsValid?'ok':'error',
             }
         },
-
     },
     {
         name: 'TimeStatus',
