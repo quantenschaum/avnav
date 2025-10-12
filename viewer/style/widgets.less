@@ -230,7 +230,8 @@
   &.DateTime { .smallWidget(); }
   &.ETA { .medWidget(); }
   &.RteEta { .medWidget(); }
-  &.TimeStatus, &.LargeTime, &.Position {
+  &.GNSSStatus { .smallWidget(); }
+  &.GNSSStatus, &.TimeStatus, &.LargeTime, &.Position {
     &.error .infoRight {
       .blink();
       color: red;

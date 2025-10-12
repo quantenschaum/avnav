@@ -100,10 +100,45 @@ let widgetList=[
             gpsValid: keys.nav.gps.valid,
         },
         formatter: 'formatTime',
+        editableParameters: {
+            unit: false,
+        },
         translateFunction: (props)=>{
             return {...props,
               unit: props.gpsValid?'OK':'ERROR',
               addClass: props.gpsValid?'ok':'error',
+            }
+        },
+    },
+    {
+        name: 'GNSSStatus',
+        caption: 'GNSS Status',
+        storeKeys:{
+            fix: keys.nav.gps.fixType,
+            qual: keys.nav.gps.fixQuality,
+            sats: keys.nav.gps.satInview,
+            used: keys.nav.gps.satUsed,
+            hdop: keys.nav.gps.HDOP,
+            valid: keys.nav.gps.valid,
+        },
+        formatter: 'formatString',
+        editableParameters: {
+            unit: false,
+            value: false,
+        },
+        translateFunction: (props)=>{
+            let ok = props.valid && (props.fix??3)>1 && (props.hdop??0)<=5 && (props.qual??1)>0;
+            let q = props.qual??'';
+            if(q==0) q='';
+            if(q==1) q='';
+            if(q==2) q='SBAS';
+            if(q==4||q==5) q='RTK';
+            if(q==6) q='DR';
+            if(q==8) q='sim';
+            return {...props,
+              unit: ok?'OK':'ERR',
+              addClass: ok?'ok':'error',
+              value: `${props.fix??'-'}D ${props.used??'-'}/${props.sats??'-'} H${props.hdop??'-'} ${q}`
             }
         },
     },
@@ -113,7 +148,8 @@ let widgetList=[
         storeKeys:{
           eta: keys.nav.wp.eta,
           time:keys.nav.gps.rtime,
-          name: keys.nav.wp.name
+          name: keys.nav.wp.name,
+          server: keys.nav.wp.server
         },
         formatter: 'formatTime',
         translateFunction: (props)=>{
@@ -121,12 +157,13 @@ let widgetList=[
               value: props.kind=='TTG'?new Date(props.eta-props.time):props.eta,
               unit: props.name,
               caption: props.kind,
+              disconnect: props.server === false
             }
         },
         editableParameters: {
             unit: false,
             kind: {type:'SELECT',list:['ETA','TTG'],default:'ETA'},
-        }
+      }
     },
     {
         name: 'DST',
@@ -134,11 +171,13 @@ let widgetList=[
         caption: 'DST',
         storeKeys:{
             value: keys.nav.wp.distance,
+            name: keys.nav.wp.name,
             server: keys.nav.wp.server
         },
-        updateFunction: (state)=>{
+        translateFunction: (state)=>{
             return {
                 value: state.value,
+                caption: state.caption+' '+state.name,
                 disconnect: state.server === false
             }
         },
@@ -154,7 +193,16 @@ let widgetList=[
         unit: "\u00b0",
         caption: 'BRG',
         storeKeys:{
-            value: keys.nav.wp.course
+            value: keys.nav.wp.course,
+            name: keys.nav.wp.name,
+            server: keys.nav.wp.server
+        },
+        translateFunction: (state)=>{
+            return {
+                value: state.value,
+                caption: state.caption+' '+state.name,
+                disconnect: state.server === false
+            }
         },
         formatter: 'formatDirection360',
         editableParameters: {
@@ -352,11 +400,13 @@ let widgetList=[
         caption: 'MRK',
         storeKeys:{
             value:keys.nav.wp.position,
-            server: keys.nav.wp.server
+            server: keys.nav.wp.server,
+            name: keys.nav.wp.name
         },
         updateFunction: (state)=>{
             return {
                 value: state.value,
+                unit: state.name,
                 disconnect: state.server === false
             }
 
