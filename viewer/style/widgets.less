@@ -89,7 +89,7 @@
   .widgetData{
     padding-top: 0;
     display: block;
-    white-space: pre;
+    white-space: pre-wrap;
   }
   .centeredWidget {
     .widgetData{
@@ -171,8 +171,8 @@
 @size15: 9em;
 @size2: 11em;
 
-.blink() {
-  animation: blinker 1s linear infinite;
+.blink(@period:1s) {
+  animation: blinker @period linear infinite;
 }
 
 @keyframes blinker {
@@ -194,16 +194,18 @@
   .bigWidget(){
     .widgetData{
       font-size: @bigFont;
+      white-space: nowrap;
     }
     .vertical & .widgetData {
-      font-size: @bigFontVertical;
+        font-size: @bigFontVertical;
+      }
     }
-  }
 
   .medWidget(){
     .widgetData{
       text-align: center;
       font-size: @timeFont;
+      white-space: normal;
     }
     .horizontal & .widgetData {
       padding-top: 0.5em;
@@ -214,6 +216,7 @@
       .widgetData{
       font-size: @smallFont;
       line-height: 1.2em;
+      white-space: normal;
     }
     .horizontal & .widgetData {
       padding-top: 0.2em;
@@ -228,23 +231,25 @@
   &.small { .smallWidget(); }
 
   &.DateTime { .smallWidget(); }
-  &.ETA { .medWidget(); }
-  &.RteEta { .medWidget(); }
+//   &.ETA { .medWidget(); }
+//   &.RteEta { .medWidget(); }
+//   &.TimeStatus { .medWidget(); }
   &.GNSSStatus { .smallWidget(); }
-  &.GNSSStatus, &.TimeStatus, &.LargeTime, &.Position {
-    &.error .infoRight {
-      .blink();
-      color: red;
+  &.error .infoRight {
+    .blink();
+    color: red;
+    font-weight: bold;
     }
-    &.ok .infoRight {
-      opacity: 1;
-      color: green;
-    }
+  &.warning .infoRight {
+    .blink(2s);
+    color: orange;
+    font-weight: bold;
   }
-  &.TimeStatus {
-    .medWidget();
+  &.ok .infoRight {
+    opacity: 1;
+    color: green;
   }
-  &.Position, &.WpPosition{
+  &.Position,&.WpPosition{
     .smallWidget();
     .widgetData{
       text-align: center;
@@ -405,7 +410,7 @@
       .resize {
         flex-direction: column;
       }
-      .widgetData {
+    .widgetData{
         padding-top: 0.5em;
       }
     }

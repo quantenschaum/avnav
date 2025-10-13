@@ -12,14 +12,13 @@ import {concatsp} from "../util/helper";
 const DirectWidget=(wprops)=>{
     const props=wprops.translateFunction?{...wprops,...wprops.translateFunction({...wprops})}:wprops;
     let val;
-    let vdef=props.default||'0';
-    if (props.value !== undefined) {
-        val=props.formatter?props.formatter(props.value):vdef+"";
+    try {
+      val=props.formatter?props.formatter(props.value):props.value;
+      val=(val==null?'':''+val)||props.default||'---';
+    }catch(error){
+      val=props.default||'---';
     }
-    else{
-        if (! isNaN(vdef) && props.formatter) val=props.formatter(vdef);
-        else val=vdef+"";
-    }
+    if(!/^-\d/.test(val)) val=val.replaceAll('-','\u2012'); // replace - by digit wide hyphen if not a neg. number, _ would also work well
     const display={
         value:val
     };

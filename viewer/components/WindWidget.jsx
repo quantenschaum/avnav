@@ -79,7 +79,7 @@ const WindWidget = (props) => {
     }
     let wind = getWindData(props);
     let a180 = !(props.show360 || wind.suffix.endsWith('D'));
-    let angle = Formatter.formatDirection(wind.windAngle,false,a180);
+    let angle = Formatter.formatDirection(wind.windAngle,false,a180,true);
     let unit = ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : 'kn';
     let speed = Formatter.formatSpeed(wind.windSpeed,unit);
     return (
@@ -104,6 +104,7 @@ const WindWidget = (props) => {
                 </React.Fragment>
             }
         </WidgetFrame>
+
     );
 }
 

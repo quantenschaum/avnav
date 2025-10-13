@@ -116,7 +116,7 @@ const WindGraphics = (props) => {
         ctx.translate(width / 2, height / 2);
         ctx.font = fontSize + "px "+globalstore.getData(keys.properties.fontBase);
         let a180 = !(props.show360 || current.suffix.endsWith('D'));
-        let txt = Formatter.formatDirection(winddirection,false,a180);
+        let txt = Formatter.formatDirection(winddirection,false,a180,true);
         let xFactor = -1.0;
         if (winddirection < 0) xFactor = -1.0;
         ctx.fillStyle = colors.text;
@@ -148,7 +148,9 @@ const WindGraphics = (props) => {
             <div className="windSpeed">{speed}</div>
             <div className="windReference">{wind.suffix}</div>
         </WidgetFrame>
+
     );
+
 }
 
 WindGraphics.propTypes={
