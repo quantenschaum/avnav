@@ -15,7 +15,7 @@ function pad(num, size, pad='0') {
  * @param axis
  * @returns {string}
  */
-const formatLonLatsDecimal=function(coordinate,axis,format='DDM',hemFirst=false){
+const formatLonLatsDecimal=function(coordinate,axis,format='DDM',hemFirst){
     if(coordinate==null) {
       let str="____\u00B0__.___'";
       if(format=='DD') str="____._____\u00B0"; // use _ to prevent line breaks
@@ -65,7 +65,7 @@ const formatLonLatsDecimal=function(coordinate,axis,format='DDM',hemFirst=false)
  * @param {Point} lonlat
  * @returns {string}
  */
-const formatLonLats=function(lonlat,format='DDM',hemFirst=false){
+const formatLonLats=function(lonlat,format='DDM',hemFirst=true){
     if(format=='OLC') {
       if(!lonlat||lonlat.lat==null||lonlat.lon==null) return "________+__";
       return new OpenLocationCode().encode(lonlat.lat,lonlat.lon);

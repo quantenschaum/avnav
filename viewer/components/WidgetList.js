@@ -15,7 +15,6 @@ import ZoomWidget from './ZoomWidget.jsx';
 import keys from '../util/keys.jsx';
 import AlarmWidget from './AlarmWidget.jsx';
 import RoutePointsWidget from './RoutePointsWidget.jsx';
-import DateTimeWidget from './DateTimeWidget.jsx';
 import {GaugeRadial} from './CanvasGauges.jsx';
 import UndefinedWidget from './UndefinedWidget.jsx';
 import {SKPitchWidget, SKRollWidget} from "./SKWidgets";
