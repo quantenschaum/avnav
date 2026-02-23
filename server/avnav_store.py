@@ -303,7 +303,7 @@ class AVNStore(object):
           else:
             nkey=key[plen:]
             if nkey.find(".") >= 0:
-              nkey=re.sub('\.*$','',nkey)
+              nkey=re.sub(r'\.*$','',nkey)
             if nkey.find(".") >= 0:
               #compound key
               keyparts=nkey.split(".")
@@ -447,8 +447,6 @@ class AVNStore(object):
 
   def getRegisteredKeys(self):
     return self.__registeredKeys.copy().update(self.__wildcardKeys)
-
-
 
 
   def __str__(self):

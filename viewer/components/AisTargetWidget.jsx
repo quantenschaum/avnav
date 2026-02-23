@@ -9,20 +9,20 @@ import PropertyHandler from '../util/propertyhandler.js';
 import AisFormatter from '../nav/aisformatter.jsx';
 import {WidgetFrame, WidgetProps} from "./WidgetBase";
 import {useStringsChanged} from "../hoc/Resizable";
-import {setav} from "../util/helper";
+import {setav,concatsp} from "../util/helper";
 
 const AisFullDisplay=(display)=> {
     return <React.Fragment>
-    <div className="aisPart">
+        <div className="aisPart">
+            <div className="widgetData">
+                <span className='label'>{AisFormatter.getHeadline('distance')} </span>
+                <span className="aisData">{display.distance}</span>
+                <span className="unit">{AisFormatter.getUnit('distance')}</span>
+            </div>
             <div className="widgetData">
                 <span className="aisData">{display.name}</span>
             </div>
-        <div className="widgetData">
-            <span className='label'>{AisFormatter.getHeadline('distance')} </span>
-            <span className="aisData">{display.distance}</span>
-            <span className="unit">{AisFormatter.getUnit('distance')}</span>
         </div>
-    </div>
     {
         display.tcpa > 0 &&
         <div className="aisPart">
@@ -46,9 +46,16 @@ const AisFullDisplay=(display)=> {
                 <span className="aisData">{display.headingTo}</span>
                 <span className="unit">{AisFormatter.getUnit('headingTo')}</span>
             </div>
+            <div className="widgetData">
+                <span className="aisData">&nbsp;</span>
+            </div>
         </div>
     }
-    <div className="aisPart">
+    <div className="aisPart withIcon">
+        {(display.iconColor !== undefined)
+            && <div className={concatsp("icon")}
+                    style={{backgroundColor:display.iconColor}}>
+            </div>}
         <div className="widgetData">
             <span className='aisFront aisData'>{display.front}</span>
         </div>
@@ -57,6 +64,7 @@ const AisFullDisplay=(display)=> {
 }
 const AisSmallDisplay=(display)=> {
     return <div className="aisSmall">
+        <div className={"upper"}>
         <div className="aisPart">
             <div className="widgetData">
                 <span className='aisFront aisData'>{display.front.substring(0, 1)}</span>
@@ -91,6 +99,11 @@ const AisSmallDisplay=(display)=> {
             </div>
         }
         </div>
+        </div>
+        {(display.iconColor !== undefined) &&<div className="aisPart withIcon">
+            <div className={concatsp("icon")} style={{backgroundColor:display.iconColor}}></div>
+        </div>
+        }
     </div>
 }
 const AisTargetWidget = (props) => {
@@ -114,10 +127,16 @@ const AisTargetWidget = (props) => {
         display.headingTo = AisFormatter.format('headingTo', target);
     }
     display.distance=AisFormatter.format('distance', target);
+    if (! props.legacy) {
+        display.iconColor = color;
+    }
     const dashMode = props.mode === "gps";
     const resizeSequence = useStringsChanged(display, dashMode);
     if (target.mmsi !== undefined || props.mode === "gps" || props.isEditing) {
-        const style = {...props.style, backgroundColor: color};
+        const style = {...props.style};
+        if (props.legacy){
+            style.backgroundColor=color;
+        }
         return (
             <WidgetFrame {...props}
                          addClass="aisTargetWidget"
@@ -150,7 +169,14 @@ AisTargetWidget.propTypes = {
     ...WidgetProps,
     isEditing: PropTypes.bool,
     target: PropTypes.object,
-    trackedMmsi: PropTypes.string
+    trackedMmsi: PropTypes.string,
+    legacy: PropTypes.bool
 };
+AisTargetWidget.editableParameters={
+    'legacy':{type:'BOOLEAN',
+        displayName:'legacy',
+        default:false,
+        description:"color the complete widget depending on the target state instead of only a badge"}
+}
 
 export default AisTargetWidget;

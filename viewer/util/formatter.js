@@ -2,7 +2,7 @@
  * Created by andreas on 04.05.14.
  */
 
-import navcompute from '../nav/navcompute.js';
+import navcompute, {DEPTH_UNITS, unitToFactor} from '../nav/navcompute.js';
 import Helper from "./helper.js";
 
 function pad(num, size, pad='0') {

@@ -5,6 +5,8 @@ import shallowcompare from "./compare";
 import Requests from "./requests";
 import base from "../base";
 import {useEffect, useRef, useState} from "react";
+import cloneDeep from "clone-deep";
+import {IMAGES} from "./itemFunctions";
 
 
 const resizeElementFont=(el)=>{
@@ -387,8 +389,6 @@ const scrollInContainer=(parent, element)=> {
     return 0;
 };
 
-const IMAGES=['png','jpg','jpeg','svg','bmp','tiff','gif'];
-
 /**
  * helper for maintaining an object inside a components state
  * it will add 2 fields to the state:
@@ -411,7 +411,7 @@ export const stateHelper=(thisref,initialValues,opt_namePrefix)=>{
         changedName=opt_namePrefix+changedName;
     }
     if (! thisref.state) thisref.state={};
-    thisref.state[valueName]=assign({},initialValues);
+    thisref.state[valueName]= assign({},initialValues);
     thisref.state[changedName]=false;
     let rt={
         setValue:(key,value)=>{
@@ -421,6 +421,15 @@ export const stateHelper=(thisref,initialValues,opt_namePrefix)=>{
             let newState={};
             newState[valueName]=values;
             newState[changedName]=!shallowcompare(values,initialValues);
+            thisref.setState(newState);
+        },
+        deleteValue:(key)=>{
+            if (! (key in thisref.state[valueName])) return;
+            let values=assign({},thisref.state[valueName]);
+            delete values[key];
+            let newState={};
+            newState[valueName]=values;
+            newState[changedName]=true;
             thisref.setState(newState);
         },
         setState:(partialState,opt_overwrite)=>{
@@ -438,8 +447,11 @@ export const stateHelper=(thisref,initialValues,opt_namePrefix)=>{
         isItemChanged(name){
             return ! shallowcompare(rt.getValue(name),initialValues[name]);
         },
-        reset(){
+        reset(opt_newInitial){
             let newState={};
+            if (opt_newInitial){
+                initialValues={...opt_newInitial}
+            }
             newState[valueName]=assign({},initialValues);
             newState[changedName]=false;
             thisref.setState(newState);
@@ -464,12 +476,77 @@ export const stateHelper=(thisref,initialValues,opt_namePrefix)=>{
     return rt;
 
 };
+/**
+ * replacement for stateHelper
+ * @param initialValues
+ * @param opt_deepCopy use deep copy
+ */
+export const useStateObject=(initialValues,opt_deepCopy)=>{
+    const copy=opt_deepCopy?(v)=>cloneDeep(v):(v)=>{return {...v}};
+    let innerInitial=copy(initialValues||{});
+    const [current,setCurrent]=useState(innerInitial);
+    const ref=useRef(current);
+    ref.current=current;
+    return {
+        setValue:(key,value)=>{
+            if (ref.current[key]==value) return;
+            let values=copy(ref.current);
+            values[key]=value;
+            setCurrent(values);
+        },
+        deleteValue:(key)=>{
+            if (! (key in ref.current)) return;
+            let values=copy(ref.current);
+            delete values[key];
+            setCurrent(values);
+        },
+        setState:(partialState,opt_overwrite)=>{
+            let values;
+            if (! opt_overwrite) {
+                if (opt_deepCopy){
+                    values=copy(ref.current);
+                    Object.assign(values,partialState);
+                }
+                else{
+                    values={...ref.current,...partialState};
+                }
+            }
+            else values=partialState||{};
+            setCurrent(values);
+        },
+        isChanged(){
+            return !shallowcompare(ref.current,innerInitial);
+        },
+        isItemChanged(name){
+            return ! shallowcompare(ref.current[name],initialValues[name]);
+        },
+        reset(opt_newInitial){
+            if (opt_newInitial){
+                innerInitial=copy(opt_newInitial)
+            }
+            setCurrent(innerInitial);
+        },
+        getState(opt_copy){
+            if (opt_copy){
+                return copy(ref.current);
+            }
+            return ref.current;
+        },
+        getValue(key,opt_default){
+            let v=ref.current[key];
+            if (v === undefined && opt_default !== undefined){
+                v=opt_default;
+            }
+            return v;
+        }
+    }
+}
 
 const getServerCommand=(name)=>{
     return Requests.getJson({
         request:'api',
         type:'command',
-        action:'getCommands'
+        command:'list'
     })
         .then((data)=> {
             if (!data.data) return;
@@ -480,6 +557,18 @@ const getServerCommand=(name)=>{
             }
         })
         .catch((e)=>base.log("unable to query server command "+name));
+}
+/**
+ * helper for the react callback issue
+ * you can use the stateRef in callbacks to obtain the current value of the state
+ * @param initial
+ * @return {[unknown,(value: unknown) => void,React.MutableRefObject<unknown>]}
+ */
+export const useStateRef=(initial)=>{
+    const [state,setState]=useState(initial);
+    const stateRef=useRef(initial);
+    stateRef.current=state;
+    return [state,setState,stateRef];
 }
 
 export default {
@@ -494,5 +583,6 @@ export default {
     storeHelper,
     storeHelperState,
     stateHelper,
-    getServerCommand
+    getServerCommand,
+    useStateRef
 };
