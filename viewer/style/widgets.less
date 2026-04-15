@@ -20,7 +20,6 @@
   pointer-events: all;
   background: var(--avnav-back-color);
   color:var(--avnav-fore-color);
-  .nightColors();
   .flex-shrink(0);
   .flex-grow(1);
   .flex-display();
@@ -181,7 +180,7 @@
 .widget{
   background-color: var(--avnav-widget-color);
   color: var(--avnav-widget-fore-color);
-  .bigWidget(@size){
+  .bigWidget(){
     .widgetData{
       font-size: @bigFont;
       white-space: nowrap;
