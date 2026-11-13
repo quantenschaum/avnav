@@ -347,11 +347,11 @@ const computeCourseVectors = (aisItem, boatCog, boatSog, options) => {
     if (!drawTMV && !drawRMV) return;  // RMV needs TMV even if zero!
     let target_rot=Math.abs(aisItem.received.turn||0); // °/min
     const curved = options.curved && isFinite(target_rot) && target_rot>0.5;
-    let cvstart=aisItem.fromEstimated?aisItem.estimated:aisItem.receivedPos
+    let cvstart = aisItem.fromEstimated ? aisItem.estimated : aisItem.receivedPos;
+    let tmv=new CourseVector();
     if (!curved){
-        aisItem.courseVector=new CourseVector();
-        aisItem.courseVector.start=cvstart;
-        aisItem.courseVector.end=NavCompute.computeTarget(
+        tmv.start=cvstart;
+        tmv.end=NavCompute.computeTarget(
             cvstart,
             target_cog,
             target_sog*options.courseVectorTime,
@@ -362,14 +362,14 @@ const computeCourseVectors = (aisItem, boatCog, boatSog, options) => {
         let turn_radius=target_sog/Helper.radians(target_rot)*60; // m, SOG=[m/s]
         let turn_center=Navcompute.computeTarget(cvstart,target_cog+target_rot_sgn*90,turn_radius);
         let turn_angle=Helper.degrees(target_sog*options.courseVectorTime/turn_radius);
-        aisItem.courseVector=new CourseVector();
-        aisItem.courseVector.type=CourseVector.T_ARC;
-        aisItem.courseVector.start=cvstart;
-        aisItem.courseVector.center=turn_center;
-        aisItem.courseVector.radius=turn_radius;
-        aisItem.courseVector.startAngle=target_cog-target_rot_sgn*90;
-        aisItem.courseVector.arc=target_rot_sgn*turn_angle;
+        tmv.type=CourseVector.T_ARC;
+        tmv.start=cvstart;
+        tmv.center=turn_center;
+        tmv.radius=turn_radius;
+        tmv.startAngle=target_cog-target_rot_sgn*90;
+        tmv.arc=target_rot_sgn*turn_angle;
     }
+    if (drawTMV) aisItem.courseVector = tmv;
     if (boatCog == null || boatSog == null) return; //RMV only possible with own COG/SOG
     if (drawRMV && boatSog > options.minAISspeed) { // for boatSog==0 RMV==TMV, skip it
         aisItem.rmv=aisItem.courseVector.clone();
