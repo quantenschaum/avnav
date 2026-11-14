@@ -429,6 +429,12 @@ export const computeAis=(aisData,boatPos,boatCog,boatSpeed, options)=>{
         }
         aisItem.age=parseFloat(ais.age || 0);
         if (ais.receiveTime != null) aisItem.age+= (now - ais.receiveTime)/1000;
+        if (ais.second != null && ais.second >= 0 && ais.second <= 59) {
+          const rtime = now / 1000; // replace this with gps.rtime
+          let ttime = rtime - aisItem.age; // transmission time
+          const tcorr = ((ttime % 60 - ais.second + 60) % 60); // correction to ais second
+          aisItem.age += tcorr; // apply directly to age
+        }
         if (aisItem.age > options.lostTime) aisItem.lost=true;
         aisItem.receivedPos = new navobjects.Point(parseFloat(ais.lon || 0), parseFloat(ais.lat || 0));
         let aisCourse = (ais.course != null)?parseFloat(ais.course || 0):undefined;
