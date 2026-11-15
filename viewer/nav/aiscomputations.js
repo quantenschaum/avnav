@@ -372,7 +372,7 @@ const computeCourseVectors = (aisItem, boatCog, boatSog, options) => {
     if (drawTMV) aisItem.courseVector = tmv;
     if (boatCog == null || boatSog == null) return; //RMV only possible with own COG/SOG
     if (drawRMV && boatSog > options.minAISspeed) { // for boatSog==0 RMV==TMV, skip it
-        aisItem.rmv=aisItem.courseVector.clone();
+        aisItem.rmv=tmv.clone();
         aisItem.rmv.offsetDir=boatCog;
         aisItem.rmv.offsetDst=-boatSog*options.courseVectorTime;
     }
