@@ -40,7 +40,8 @@ import Helper from "../util/helper";
 let boatData={
     position: new navobjects.Point(undefined,undefined),
     speed: undefined,
-    course: undefined
+    course: undefined,
+    rtime: undefined
 };
 
 let receivedAisData=[];
@@ -56,7 +57,7 @@ const computeAis=()=>{
         source=undefined;
         aisErrors=10;
     }
-    return handleReceivedAisData(receivedAisData,boatData.position,boatData.course,boatData.speed,options);
+    return handleReceivedAisData(receivedAisData,boatData.position,boatData.course,boatData.speed,options,boatData.rtime);
 }
 
 const queryData=async (distance,center,timeout,navUrl)=>{
@@ -99,6 +100,7 @@ const fillOptionsAndBoatData=(messageData)=>{
         boatData.position=new navobjects.Point(messageData.boatPosition.lon,messageData.boatPosition.lat);
         boatData.speed=messageData.boatSpeed;
         boatData.course=messageData.boatCourse;
+        boatData.rtime=messageData.boatRtime;
     }
     if (messageData.options !== undefined) options=messageData.options;
 

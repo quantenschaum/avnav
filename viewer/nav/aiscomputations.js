@@ -399,11 +399,13 @@ const correctedCourse=(course,speed,minSpeed)=>{
  * @param boatCog {number} in debrees
  * @param boatSpeed {number} in ms/s
  * @param options {object} keys are the same as in {@link AisOptionMappings}
+ * @param gpsRtime {Date} GPS runtime, if available
  */
-export const computeAis=(aisData,boatPos,boatCog,boatSpeed, options)=>{
-    let now=(new Date()).getTime();
+export const computeAis=(aisData,boatPos,boatCog,boatSpeed, options, gpsRtime)=>{
     if (aisData == null) return;
     if (! (aisData instanceof Array)) throw new Error("invalid ais data");
+    const now=(new Date()).getTime();
+    const gpsTime = gpsRtime instanceof Date ? gpsRtime.getTime() : null;
     let aisWarningAis=undefined; //the most important warning
     aisData.forEach((aisItem)=>{
         AISItem.reset(aisItem);
@@ -429,11 +431,17 @@ export const computeAis=(aisData,boatPos,boatCog,boatSpeed, options)=>{
         }
         aisItem.age=parseFloat(ais.age || 0);
         if (ais.receiveTime != null) aisItem.age+= (now - ais.receiveTime)/1000;
-        if (ais.second != null && ais.second >= 0 && ais.second <= 59) {
-          const rtime = now / 1000; // replace this with gps.rtime
+        if (gpsTime && ais.second != null && ais.second >= 0 && ais.second <= 59) {
+          // const rtime = now / 1000;
+          const rtime = gpsTime / 1000;
+          // console.log('rtime',rtime,new Date(rtime))
           let ttime = rtime - aisItem.age; // transmission time
-          const tcorr = ((ttime % 60 - ais.second + 60) % 60); // correction to ais second
+          // console.log('ttime',ttime,ttime%60,new Date(ttime*1000))
+          const s = 30; // to allow for gpsTime being slow
+          const tcorr = ((ttime % 60 - ais.second + 60 + s) % 60) - s; // correction to ais second
+          // console.log('ttime*',ttime-tcorr,new Date((ttime-tcorr)*1000))
           aisItem.age += tcorr; // apply directly to age
+          console.log('ttime',Math.floor(ttime%60),'second',ais.second,'tcorr',Math.floor(tcorr),'age',Math.floor(aisItem.age),ais.shipname,ais.mmsi)
         }
         if (aisItem.age > options.lostTime) aisItem.lost=true;
         aisItem.receivedPos = new navobjects.Point(parseFloat(ais.lon || 0), parseFloat(ais.lat || 0));
@@ -504,14 +512,15 @@ export const computeAis=(aisData,boatPos,boatCog,boatSpeed, options)=>{
  * @param boatCog {number}
  * @param boatSpeed {number}
  * @param options {object} see {@link AisOptionMappings}
+ * @param gpsRtime {Date} GPS runtime, if available
  * @returns {*[]}
  */
-export const handleReceivedAisData=(jsonData,boatPos, boatCog, boatSpeed, options)=>{
+export const handleReceivedAisData=(jsonData,boatPos, boatCog, boatSpeed, options, gpsRtime)=>{
     let aisItems=[];
     jsonData.forEach((item)=>{
         aisItems.push(new AISItem(item))
     })
-    computeAis(aisItems,boatPos,boatCog,boatSpeed,options);
+    computeAis(aisItems,boatPos,boatCog,boatSpeed,options,gpsRtime);
     return aisItems;
 }
 

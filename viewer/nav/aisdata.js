@@ -206,6 +206,7 @@ class AisData {
             boatPosition:globalStore.getData(keys.nav.gps.position),
             boatSpeed: globalStore.getData(keys.nav.gps.speed),
             boatCourse: globalStore.getData(keys.nav.gps.course),
+            boatRtime: globalStore.getData(keys.nav.gps.rtime),
             trackedMMsi: globalStore.getData(keys.nav.ais.trackedMmsi)
         })
     }
