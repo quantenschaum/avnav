@@ -392,6 +392,8 @@ const correctedCourse=(course,speed,minSpeed)=>{
     if (speed <= minSpeed) return 0;
     return course;
 }
+
+const tcorrhist = {};
 /**
  *
  * @param aisData {Array<AISItem>} this list is filled with the estimated values and the CPA computation
@@ -441,7 +443,9 @@ export const computeAis=(aisData,boatPos,boatCog,boatSpeed, options, gpsRtime)=>
           const tcorr = ((ttime % 60 - ais.second + 60 + s) % 60) - s; // correction to ais second
           // console.log('ttime*',ttime-tcorr,new Date((ttime-tcorr)*1000))
           aisItem.age += tcorr; // apply directly to age
-          console.log('ttime',Math.floor(ttime%60),'second',ais.second,'tcorr',Math.floor(tcorr),'age',Math.floor(aisItem.age),ais.shipname,ais.mmsi)
+          const tc = Math.round(tcorr);
+          tcorrhist[tc] = (tcorrhist[tc] || 0) + 1;
+          // console.log('ttime',Math.floor(ttime%60),'second',ais.second,'tcorr',Math.floor(tcorr),'age',Math.floor(aisItem.age),ais.shipname,ais.mmsi)
         }
         if (aisItem.age > options.lostTime) aisItem.lost=true;
         aisItem.receivedPos = new navobjects.Point(parseFloat(ais.lon || 0), parseFloat(ais.lat || 0));
@@ -499,6 +503,20 @@ export const computeAis=(aisData,boatPos,boatCog,boatSpeed, options, gpsRtime)=>
         }
         computeCourseVectors(aisItem, boatCog, boatSpeed, options);
     })
+    // Log the accumulated time-correction distribution as an ASCII histogram.
+    const histogramEntries = Object.entries(tcorrhist)
+        .map(([correction, count]) => [Number(correction), count])
+        .sort((a, b) => a[0] - b[0]);
+    if (histogramEntries.length) {
+        const maxCount = Math.max(...histogramEntries.map(([, count]) => count));
+        const barWidth = 40;
+        console.log('  tc | count');
+        histogramEntries.forEach(([correction, count]) => {
+            const bar = '#'.repeat(Math.max(1, Math.round(count / maxCount * barWidth)));
+            console.log(`${String(correction).padStart(4)} | ${bar} ${count}`);
+        });
+    }
+
     if (aisWarningAis != null){
         aisWarningAis.nextWarning=true;
     }
